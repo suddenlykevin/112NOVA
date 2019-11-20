@@ -7,6 +7,7 @@
 
 import pygame, math, sys
 import random
+from PIL import Image
 
 # applies distance formula to two objects given cx and cyrun
 def dist(object1, object2):
@@ -30,6 +31,26 @@ class Player(object):
     
     def draw(self):
         pass
+
+    def retrieveSprites(self):
+        spritesheet = Image.open("4Njmyen.png")
+        dx, dy = 96, 104
+        # 8 animations, each with a maximum of 10 frames
+        spriteAnims = 8
+        maxFrames = 10
+        sprites = []
+        # splits animation into 8 strips
+        for strip in range(spriteAnims):
+            spritestrip = []
+            for i in range(maxFrames):
+                spritestrip.append(spritesheet.crop((dx*i, dy*strip,
+                                                     dx*(i+1), dy*(strip+1))))
+            sprites.append(spritestrip)
+        # scales each sprite down by half
+        for row in range(spriteAnims):
+            for col in range(maxFrames):
+                sprites[row][col] = sprites[row][col].resize(48, 52)
+        return sprites
 
 # pass in cx, cy, always starts at r = 0/1 and grows as mouse is held
 class Planet(object):
@@ -71,7 +92,7 @@ class NovaGame(object):
         self.player = Player(self.screen, (10, 10))
         self.objects = []
         self.planets = []
-        self.planetDensity = 10**4 # arbitrary value for now
+        self.planetDensity = 10**4.5 # arbitrary value for now
         self.G = 6.7 * (10**-11)
         self.clock = pygame.time.Clock()
         self.timer = 100
@@ -101,8 +122,9 @@ class NovaGame(object):
                     self.pause()
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if pygame.mouse.get_pressed()[0]:
-                    self.currentPlanet = [Planet(self.screen, pygame.mouse.get_pos()), True]
-                    self.planets.append(self.currentPlanet[0])
+                    if not self.isInPlanet(pygame.mouse.get_pos()):
+                        self.currentPlanet = [Planet(self.screen, pygame.mouse.get_pos()), True]
+                        self.planets.append(self.currentPlanet[0])
                 elif pygame.mouse.get_pressed()[2]:
                     self.objects.append(Enemy(self.screen, pygame.mouse.get_pos()))
             elif event.type == pygame.MOUSEBUTTONUP:
@@ -115,6 +137,15 @@ class NovaGame(object):
                 pygame.quit()
                 sys.exit()
 
+    def isInPlanet(self, pos):
+        for planet in self.planets:
+            r = [planet.cx - pos[0], planet.cy - pos[1]]
+            magnitude = (r[0]**2 + r[1]**2)**0.5
+            if magnitude < planet.r:
+                self.currentPlanet = [planet, True]
+                return True
+        return False
+
     def checkCollisions(self):
         newObjects = self.objects
         # nested loop may be inefficient
@@ -123,6 +154,8 @@ class NovaGame(object):
                 if dist(planet, enemy)[1] <= planet.r:
                     newObjects.remove(enemy)
                     self.player.fuel += enemy.mass * 10**4
+                    if self.player.fuel > 10**6:
+                        self.player.fuel = 10 ** 6
         self.objects = newObjects
 
     def pause(self):
@@ -144,7 +177,7 @@ class NovaGame(object):
                 self.currentPlanet[0].r += self.growRate * self.clock.get_time()
                 self.currentPlanet[0].mass = (2 * math.pi * 
                 (self.currentPlanet[0].r**2) * self.planetDensity)
-                self.player.fuel -= self.growRate * self.planetDensity
+                self.player.fuel -= self.growRate * self.planetDensity*4
             print(self.player.fuel)
             self.timer -= self.clock.get_time() * 10**-3
             for enemy in self.objects:
