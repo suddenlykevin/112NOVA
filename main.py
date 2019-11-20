@@ -69,7 +69,7 @@ class Enemy(object):
         self.screen = screen
         self.cx, self.cy = pos[0], pos[1]
         self.r = 10
-        self.velocity = [0,0]
+        self.velocity = [0.25,0]
         self.mass = 10
     
     def move(self, time):
@@ -92,7 +92,7 @@ class NovaGame(object):
         self.player = Player(self.screen, (10, 10))
         self.objects = []
         self.planets = []
-        self.planetDensity = 10**4.5 # arbitrary value for now
+        self.planetDensity = 10**4 # arbitrary value for now
         self.G = 6.7 * (10**-11)
         self.clock = pygame.time.Clock()
         self.timer = 100
@@ -154,7 +154,7 @@ class NovaGame(object):
                 if dist(planet, enemy)[1] <= planet.r:
                     newObjects.remove(enemy)
                     self.player.fuel += enemy.mass * 10**4
-                    if self.player.fuel > 10**6:
+                    if self.player.fuel > 10 ** 6:
                         self.player.fuel = 10 ** 6
         self.objects = newObjects
 
@@ -177,8 +177,7 @@ class NovaGame(object):
                 self.currentPlanet[0].r += self.growRate * self.clock.get_time()
                 self.currentPlanet[0].mass = (2 * math.pi * 
                 (self.currentPlanet[0].r**2) * self.planetDensity)
-                self.player.fuel -= self.growRate * self.planetDensity*4
-            print(self.player.fuel)
+                self.player.fuel -= self.growRate * self.planetDensity
             self.timer -= self.clock.get_time() * 10**-3
             for enemy in self.objects:
                 enemy.move(self.clock.get_time())
