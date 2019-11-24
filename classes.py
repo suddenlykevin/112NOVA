@@ -1,0 +1,139 @@
+import random
+import pygame
+import math
+from mapgenerator import *
+
+# holds player position and attributes
+class Player(pygame.sprite.Sprite):
+    def __init__(self, screen, pos):
+        super().__init__()
+        self.screen = screen
+        self.cx, self.cy = pos[0], pos[1]
+        self.fuel = 10 ** 6
+
+    def drawGUI(self):
+        ratio = self.fuel / 10 ** 6
+        fuelBar = pygame.Rect(0, self.screen.get_height() - 10,
+                              self.screen.get_width() * ratio, 10)
+        pygame.draw.rect(self.screen, [255, 127, 0], fuelBar)
+
+    def draw(self):
+        pass
+
+    def retrieveSprites(self):
+        spritesheet = Image.open("4Njmyen.png")
+        dx, dy = 96, 104
+        # 8 animations, each with a maximum of 10 frames
+        spriteAnims = 8
+        maxFrames = 10
+        sprites = []
+        # splits animation into 8 strips
+        for strip in range(spriteAnims):
+            spritestrip = []
+            for i in range(maxFrames):
+                spritestrip.append(spritesheet.crop((dx * i, dy * strip,
+                                                     dx * (i + 1),
+                                                     dy * (strip + 1))))
+            sprites.append(spritestrip)
+        # scales each sprite down by half
+        for row in range(spriteAnims):
+            for col in range(maxFrames):
+                sprites[row][col] = sprites[row][col].resize(48, 52)
+        return sprites
+
+class Planet(pygame.sprite.Sprite):
+    def __init__(self, screen, pos):
+        super().__init__()
+        self.screen = screen
+        self.pos = pos
+        self.density = 3 * 10 ** 4
+        self.radius = 0
+        self.mass = 0
+
+    def retrieveSprites(self):
+        pass
+
+    def update(self, rate):
+        self.radius += rate
+        self.mass = math.pi * (self.radius ** 2) * self.density
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255,255,255, 0])
+        pygame.draw.circle(self.image, [255, 0, 0], (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
+
+# pass in cx, cy
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, screen, pos):
+        super().__init__()
+        self.screen = screen
+        self.pos = pos
+        self.velocity = pygame.math.Vector2(0,0)
+        self.mass = 10
+        self.radius = 10
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, [128] * 3, (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
+
+    def move(self, time):
+        self.pos = tuple((self.pos[i] + self.velocity[i] * time) for i in range(
+            len(self.velocity)))
+        self.rect.center = self.pos
+
+    def draw(self):
+        pass
+
+class PathPiece(pygame.sprite.Sprite):
+    directions = [[0.1,0], [0,0.1], [-0.1,0], [0,-0.1]]
+    def __init__(self, pos, size, orientation):
+        super().__init__()
+        self.size = size
+        self.image = pygame.Surface([size] * 2)
+        self.image.fill([0,0,0])
+        self.pos = pos
+        self.rect = self.image.get_rect()
+        self.rect.topleft = self.pos
+        self.direction = PathPiece.directions[orientation]
+
+class Map(pygame.sprite.Group):
+    def __init__(self, screen, diff):
+        self.coords = MapGenerator(8, 8, diff, (7, 7)).solve()
+        self.screen = screen
+        self.tileSize = self.screen.get_width() // 9
+        self.spriteMap = self.retrieveSprites()
+        super().__init__(self.spriteMap)
+
+    def retrieveSprites(self):
+        spriteList = set()
+        for i in range(len(self.coords)):
+            if i < len(self.coords) - 1:
+                if self.coords[i][0] < self.coords[i+1][0]:
+                    orientation = 0
+                elif self.coords[i][0] > self.coords[i+1][0]:
+                    orientation = 2
+                elif self.coords[i][1] < self.coords[i+1][1]:
+                    orientation = 1
+                else:
+                    orientation = 3
+            transCoord = [elem * self.tileSize for elem in self.coords[i]]
+            spriteList.add(PathPiece(transCoord, self.tileSize, orientation))
+        return spriteList
+
+# test subclass of enemy
+class BadEnemy(Enemy):
+    def __init__(self, screen, pos):
+        super().__init__(screen, pos)
+
+class EnemyGroup(pygame.sprite.Group):
+    def __init__(self, *sprites):
+        super().__init__(sprites)
+
+    def update(self, time):
+        for sprite in self:
+            sprite.move(time)

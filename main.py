@@ -5,84 +5,18 @@
 # Your andrew id: kevinx
 #################################################
 
-import pygame, math, sys
-import random
+import math
+import pygame
+import sys
+from classes import *
+from mapgenerator import *
 from PIL import Image
+
 
 # applies distance formula to two objects given cx and cyrun
 def dist(object1, object2):
-    r = [object2.cx - object1.cx, object2.cy - object1.cy]
-    magnitude = (r[0]**2 + r[1]**2)**0.5
-    rUnit = [r[0]/magnitude, r[1]/magnitude]
-    return [rUnit, magnitude]
-
-# holds player position and attributes
-class Player(object):
-    def __init__(self, screen, pos):
-        self.screen = screen
-        self.cx, self.cy = pos[0], pos[1]
-        self.fuel = 10**6
-
-    def drawGUI(self):
-        ratio = self.fuel / 10**6
-        fuelBar = pygame.Rect(0, self.screen.get_height() - 10, 
-                       self.screen.get_width() * ratio, 10)
-        pygame.draw.rect(self.screen, [255,127,0], fuelBar)
-    
-    def draw(self):
-        pass
-
-    def retrieveSprites(self):
-        spritesheet = Image.open("4Njmyen.png")
-        dx, dy = 96, 104
-        # 8 animations, each with a maximum of 10 frames
-        spriteAnims = 8
-        maxFrames = 10
-        sprites = []
-        # splits animation into 8 strips
-        for strip in range(spriteAnims):
-            spritestrip = []
-            for i in range(maxFrames):
-                spritestrip.append(spritesheet.crop((dx*i, dy*strip,
-                                                     dx*(i+1), dy*(strip+1))))
-            sprites.append(spritestrip)
-        # scales each sprite down by half
-        for row in range(spriteAnims):
-            for col in range(maxFrames):
-                sprites[row][col] = sprites[row][col].resize(48, 52)
-        return sprites
-
-# pass in cx, cy, always starts at r = 0/1 and grows as mouse is held
-class Planet(object):
-    def __init__(self, screen, pos):
-        self.screen = screen
-        self.cx, self.cy = pos[0], pos[1]
-        self.r = 0
-        self.mass = 0
-
-    def draw(self):
-        pass
-
-# pass in cx, cy
-class Enemy(object):
-    def __init__(self, screen, pos):
-        self.screen = screen
-        self.cx, self.cy = pos[0], pos[1]
-        self.r = 10
-        self.velocity = [0.25,0]
-        self.mass = 10
-    
-    def move(self, time):
-        self.cx += self.velocity[0] * time
-        self.cy += self.velocity[1] * time
-    
-    def draw(self):
-        pass
-
-# test subclass of enemy
-class BadEnemey(Enemy):
-    def __init__(self, screen, pos):
-        super().__init__(screen, pos)
+    r = pygame.math.Vector2(object2[0] - object1[0], object2[1] - object1[1])
+    return r
 
 # main gameplay
 class NovaGame(object):
@@ -90,48 +24,61 @@ class NovaGame(object):
         self.width, self.height = width, height
         self.screen = screen
         self.player = Player(self.screen, (10, 10))
-        self.objects = []
-        self.planets = []
+        self.enemies = EnemyGroup()
+        self.planets = pygame.sprite.Group()
         self.planetDensity = 10**4 # arbitrary value for now
         self.G = 6.7 * (10**-11)
         self.clock = pygame.time.Clock()
         self.timer = 100
         self.growRate = 0.2
         self.running = True
+        self.map = Map(self.screen, 4)
         self.currentPlanet = [None, False]
+        self.shrinkRate = -0.005
 
     # updates global physics acting on each planet -- maybe create vector field?
     def updatePhysics(self):
         # nested loop may become inefficient
-        for planet in self.planets:
-            for enemy in self.objects:
-                r = dist(enemy, planet)
-                acceleration = (self.G * planet.mass) / (r[1])
-                vector = [r[0][0] * acceleration, r[0][1] * acceleration]
-                enemy.velocity[0] += vector[0]
-                enemy.velocity[1] += vector[1]
-    
+        for enemy in self.enemies:
+            finalVelocity = enemy.velocity
+            for path in self.map:
+                if (path.pos[0] < enemy.pos[0] < path.pos[0] + path.size and
+                    path.pos[1] < enemy.pos[1] < path.pos[1] + path.size):
+                    if random.choice([True, False, False, False, False]):
+                        if path.direction[0] == 0:
+                            finalVelocity[1] = path.direction[1]
+                            finalVelocity[0]  *= 0.9
+                        else:
+                            finalVelocity[0] = path.direction[0]
+                            finalVelocity[1] *= 0.9
+            for planet in self.planets:
+                r = dist(enemy.pos, planet.pos)
+                acceleration = (self.G * planet.mass) / (r.magnitude())
+                r.scale_to_length(acceleration)
+                finalVelocity += r
+            print(finalVelocity)
+            enemy.velocity = finalVelocity
+
     # checks all "events" keystrokes, mousepresses etc.
     def checkEvents(self):
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_DELETE:
-                    if len(self.planets) > 0:
-                        self.planets.pop()
                 if event.key == pygame.K_p:
                     self.pause()
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if pygame.mouse.get_pressed()[0]:
-                    if not self.isInPlanet(pygame.mouse.get_pos()):
+                    if (not self.isInPlanet(pygame.mouse.get_pos()) and not
+                            self.isInPath(pygame.mouse.get_pos())):
                         self.currentPlanet = [Planet(self.screen, pygame.mouse.get_pos()), True]
-                        self.planets.append(self.currentPlanet[0])
+                        self.currentPlanet[0].update(0)
+                        self.planets.add(self.currentPlanet[0])
                 elif pygame.mouse.get_pressed()[2]:
-                    self.objects.append(Enemy(self.screen, pygame.mouse.get_pos()))
+                    self.enemies.add(Enemy(self.screen, pygame.mouse.get_pos()))
             elif event.type == pygame.MOUSEBUTTONUP:
                 if self.currentPlanet[1]:
                     self.currentPlanet[1] = False
                     self.currentPlanet[0].mass = (2 * math.pi * 
-                    (self.currentPlanet[0].r**2) * self.planetDensity)
+                    (self.currentPlanet[0].radius**2) * self.planetDensity)
             elif event.type == pygame.QUIT:
                 pygame.display.quit()
                 pygame.quit()
@@ -139,24 +86,28 @@ class NovaGame(object):
 
     def isInPlanet(self, pos):
         for planet in self.planets:
-            r = [planet.cx - pos[0], planet.cy - pos[1]]
+            r = [planet.pos[0] - pos[0], planet.pos[1] - pos[1]]
             magnitude = (r[0]**2 + r[1]**2)**0.5
-            if magnitude < planet.r:
+            if magnitude < planet.radius:
                 self.currentPlanet = [planet, True]
                 return True
         return False
 
+    def isInPath(self, pos):
+        for path in self.map:
+            if (path.pos[0] < pos[0] < path.pos[0] + path.size and
+                path.pos[1] < pos[1] < path.pos[1] + path.size):
+                return True
+        return False
+
     def checkCollisions(self):
-        newObjects = self.objects
-        # nested loop may be inefficient
+        hit_list = []
         for planet in self.planets:
-            for enemy in self.objects:
-                if dist(planet, enemy)[1] <= planet.r:
-                    newObjects.remove(enemy)
-                    self.player.fuel += enemy.mass * 10**4
-                    if self.player.fuel > 10 ** 6:
-                        self.player.fuel = 10 ** 6
-        self.objects = newObjects
+            hit_list += pygame.sprite.spritecollide(planet, self.enemies, True,
+                                           collided =
+                                           pygame.sprite.collide_circle)
+        for enemy in hit_list:
+            self.player.fuel += enemy.mass * 10 ** 4
 
     def pause(self):
         while self.running:
@@ -165,6 +116,24 @@ class NovaGame(object):
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_p:
                         return
+            self.clock.tick()
+
+    def growPlanet(self):
+        for planet in self.planets:
+            if planet != self.currentPlanet[0] or not self.currentPlanet[1]:
+                planet.update(self.shrinkRate * self.clock.get_time())
+                print(planet.mass)
+                if planet.radius <= 2:
+                     self.planets.remove(planet)
+        if self.currentPlanet[1] == False:
+            return
+        collide = False
+        for path in self.map:
+            if (pygame.sprite.collide_circle(self.currentPlanet[0], path)):
+                collide = True
+        if (self.player.fuel > self.growRate and not collide):
+            self.currentPlanet[0].update(self.growRate * self.clock.get_time())
+            self.player.fuel -= self.growRate * self.planetDensity / 2
 
     def play(self):
         timerFont = pygame.font.Font('Linebeam.ttf', 24)
@@ -173,17 +142,12 @@ class NovaGame(object):
             self.checkEvents()
             self.checkCollisions()
             self.updatePhysics()
-            if self.currentPlanet[1] and self.player.fuel > self.growRate:
-                self.currentPlanet[0].r += self.growRate * self.clock.get_time()
-                self.currentPlanet[0].mass = (2 * math.pi * 
-                (self.currentPlanet[0].r**2) * self.planetDensity)
-                self.player.fuel -= self.growRate * self.planetDensity
+            self.growPlanet()
             self.timer -= self.clock.get_time() * 10**-3
-            for enemy in self.objects:
-                enemy.move(self.clock.get_time())
-                pygame.draw.circle(self.screen, [127, 127, 127], (enemy.cx, enemy.cy), enemy.r)
-            for planet in self.planets:
-                pygame.draw.circle(self.screen, [255,0,0], (planet.cx, planet.cy), planet.r)
+            self.enemies.update(self.clock.get_time())
+            self.map.draw(self.screen)
+            self.planets.draw(self.screen)
+            self.enemies.draw(self.screen)
             timer = timerFont.render(f'{int(self.timer)}', True, [0] * 3)
             timerSurface = timer.get_rect()
             timerSurface.center = ((self.width//2, self.height*1//5))
