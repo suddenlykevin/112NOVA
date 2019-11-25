@@ -1,24 +1,41 @@
-import random
-import pygame
 import math
+
+import pygame
+
 from mapgenerator import *
+
 
 # holds player position and attributes
 class Player(pygame.sprite.Sprite):
     def __init__(self, screen, pos):
         super().__init__()
         self.screen = screen
-        self.cx, self.cy = pos[0], pos[1]
+        self.pos = pos
         self.fuel = 10 ** 6
+        self.health = 10
+        self.image = pygame.Surface([self.screen.get_width()/8] * 2,
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        self.radius = self.screen.get_width()/16
+        pygame.draw.circle(self.image, [0, 0, 255],
+                           (self.screen.get_width()/16,
+                            self.screen.get_width()/16),
+                           self.screen.get_width()/16)
+        self.rect = self.image.get_rect()
+        self.rect.topleft = self.pos
 
     def drawGUI(self):
         ratio = self.fuel / 10 ** 6
         fuelBar = pygame.Rect(0, self.screen.get_height() - 10,
                               self.screen.get_width() * ratio, 10)
         pygame.draw.rect(self.screen, [255, 127, 0], fuelBar)
+        healthRatio = self.health / 10
+        healthBar = pygame.Rect(0, self.screen.get_height() - 20,
+                                self.screen.get_width() * healthRatio, 10)
+        pygame.draw.rect(self.screen, [255, 0, 32], healthBar)
 
     def draw(self):
-        pass
+        self.screen.blit(self.image,self.rect)
 
     def retrieveSprites(self):
         spritesheet = Image.open("4Njmyen.png")
@@ -91,11 +108,12 @@ class Enemy(pygame.sprite.Sprite):
 
 class PathPiece(pygame.sprite.Sprite):
     directions = [[0.1,0], [0,0.1], [-0.1,0], [0,-0.1]]
-    def __init__(self, pos, size, orientation):
+    def __init__(self, pos, size, orientation, corner):
         super().__init__()
+        self.corner = corner
         self.size = size
         self.image = pygame.Surface([size] * 2)
-        self.image.fill([0,0,0])
+        self.image.fill([32,32,64])
         self.pos = pos
         self.rect = self.image.get_rect()
         self.rect.topleft = self.pos
@@ -121,8 +139,15 @@ class Map(pygame.sprite.Group):
                     orientation = 1
                 else:
                     orientation = 3
+            corner = False
+            if i > 0:
+                if (self.coords[i][0] != self.coords[i-1][0] and
+                        orientation in (1,3)) or (self.coords[i][1] !=
+                        self.coords[i-1][1] and orientation in (0,2)):
+                    corner = True
             transCoord = [elem * self.tileSize for elem in self.coords[i]]
-            spriteList.add(PathPiece(transCoord, self.tileSize, orientation))
+            spriteList.add(PathPiece(transCoord, self.tileSize, orientation,
+                                     corner))
         return spriteList
 
 # test subclass of enemy
@@ -137,3 +162,50 @@ class EnemyGroup(pygame.sprite.Group):
     def update(self, time):
         for sprite in self:
             sprite.move(time)
+
+class Button(pygame.sprite.Sprite):
+    def __init__(self, pos, size, message, color, action = None):
+        super().__init__()
+        self.pos = pos
+        self.size = size
+        self.message = message
+        self.action = action
+        self.image = pygame.Surface(size)
+        self.image.fill(color)
+        self.rect = self.image.get_rect()
+        self.rect.topleft = pos
+
+    def update(self):
+        mouse = pygame.mouse.get_pos()
+        click = pygame.mouse.get_pressed()
+        if self.rect.collidepoint(mouse) and (click[0] == 1):
+            if self.action != None:
+                self.action()
+
+class RoundButton(pygame.sprite.Sprite):
+    def __init__(self, pos, radius, message, color, action = None):
+        super().__init__()
+        self.pos = pos
+        self.radius = radius
+        self.message = message
+        self.action = action
+        self.color = color
+        self.refreshSprite()
+
+    def refreshSprite(self):
+        self.image = pygame.Surface([self.radius * 2] * 2, pygame.SRCALPHA)
+        pygame.draw.circle(self.image, self.color, (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
+
+    def update(self):
+        mouse = pygame.mouse.get_pos()
+        click = pygame.mouse.get_pressed()
+        if self.rect.collidepoint(mouse) and (click[0] == 1):
+            self.radius += 3
+            self.refreshSprite()
+        else:
+            if self.radius > 52:
+                self.radius -= 3
+                self.refreshSprite()
