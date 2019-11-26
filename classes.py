@@ -162,13 +162,42 @@ class SpeedyEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
 
+def wallBetweenPos(pos0, pos1, wall):
+    if wall.pos1 == None:
+        return False
+    (x0, y0) = pos0
+    (x1, y1) = pos1
+    x = (x0, x1)
+    y = (y0, y1)
+    (i0, j0) = wall.pos0
+    (i1, j1) = wall.pos1
+    i = (i0, i1)
+    j = (j0, j1)
+    if (min(x) <= max(i) and max(x) >= min(i) and max(y) >= min(j)
+            and min(y) <= max(j)):
+        return True
+    return False
+
 class EnemyGroup(pygame.sprite.Group):
     def __init__(self, *sprites):
         super().__init__(sprites)
 
-    def update(self, time):
+    def update(self, time, walls):
+        toBeRemoved = []
+        wallsForRemoval = []
         for sprite in self:
+            pos0 = sprite.pos
             sprite.move(time)
+            pos1 = sprite.pos
+            for wall in walls:
+                if wallBetweenPos(pos0, pos1, wall):
+                    toBeRemoved.append(sprite)
+                    wallsForRemoval.append(wall)
+        for sprite in toBeRemoved:
+            print(sprite)
+            self.remove(sprite)
+        for wall in wallsForRemoval:
+            walls.remove(wall)
 
 class Button(pygame.sprite.Sprite):
     def __init__(self, screen, pos, size, message, color, action = None):

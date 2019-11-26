@@ -259,7 +259,7 @@ class NovaGame(Mode):
             self.updatePhysics()
             self.growPlanet()
             self.timer -= self.clock.get_time() * 10**-3
-            self.enemies.update(self.clock.get_time())
+            self.enemies.update(self.clock.get_time(), self.walls)
             self.map.draw(self.screen)
             self.planets.draw(self.screen)
             self.enemies.draw(self.screen)
