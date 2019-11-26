@@ -153,6 +153,15 @@ class DestructiveEnemy(Enemy):
 class EmptyEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
+        self.mass = 0
+        self.radius = 10
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, [0, 0, 255], (self.radius, self.radius),
+                           self.radius, width = 2)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
 
 class ResistiveEnemy(Enemy):
     def __init__(self, screen, pos):
@@ -186,7 +195,7 @@ class EnemyGroup(pygame.sprite.Group):
         toBeRemoved = []
         wallsForRemoval = []
         for sprite in self:
-            pos0 = sprite.pos
+            pos0 = copy.copy(sprite.pos)
             sprite.move(time)
             pos1 = sprite.pos
             for wall in walls:
@@ -194,7 +203,6 @@ class EnemyGroup(pygame.sprite.Group):
                     toBeRemoved.append(sprite)
                     wallsForRemoval.append(wall)
         for sprite in toBeRemoved:
-            print(sprite)
             self.remove(sprite)
         for wall in wallsForRemoval:
             walls.remove(wall)
@@ -255,7 +263,9 @@ class RoundButton(pygame.sprite.Sprite):
             self.refreshSprite()
             corner = (self.screen.get_width(), self.screen.get_height())
             if (distance(self.pos, corner) < self.radius and
-                distance(self.pos, (0, 0)) < self.radius):
+                distance(self.pos, (0, 0)) < self.radius and
+                distance(self.pos, (corner[0], 0)) < self.radius and
+                distance(self.pos, (0, corner[1])) < self.radius):
                 if self.action != None:
                     self.action()
         else:

@@ -25,12 +25,12 @@ def matchSign(value, determ):
         return -1 * abs(value)
     return abs(value)
 
-# https://www.cs.cmu.edu/~112/notes/notes-variables-and-functions.html
-# modified to allow a larger leeway
+# CITATION: https://www.cs.cmu.edu/~112/notes/notes-variables-and-functions.html
+# Almost Equal from 15-112 modified to allow a larger leeway
 def almostEqual(x, y):
     return abs(x - y) < 1
 
-# applies distance formula to two objects given cx and cyrun
+# applies distance formula to two objects given cx and cy
 def dist(object1, object2):
     r = pygame.math.Vector2(object2[0] - object1[0], object2[1] - object1[1])
     return r
@@ -39,7 +39,7 @@ def dist(object1, object2):
 #
 # Pygame "Mode" Classes
 #
-# Loosely adapted from ModalApp:
+# CITATION: Loosely adapted from ModalApp:
 # https://www.cs.cmu.edu/~112/notes/notes-animations-part2.html#subclassingModalApp
 #
 #################################################
@@ -109,7 +109,7 @@ class NovaGame(Mode):
         self.wave = WaveGenerator(10,18,1).solve()
         self.diff = 10
         self.length = 18
-        self.maxDiff = 1
+        self.maxDiff = 2
         self.waveNum = 1
         self.title = Title(self.screen, "Wave 1")
         self.shrinkRate = -0.005
@@ -227,7 +227,7 @@ class NovaGame(Mode):
             self.player.health -= 1
             if self.player.health == 0:
                 self.control.endMode.status = 1
-                self.control.endMode.score = self.player.score
+                self.control.endMode.score = self.waveNum
                 self.control.setActiveMode(self.control.endMode)
         for enemy in self.enemies:
             if not (0 < enemy.pos[1] < self.height and 0 < enemy.pos[0] <
@@ -267,13 +267,16 @@ class NovaGame(Mode):
                 self.currentWall[0].pos1 = pygame.mouse.get_pos()
             for wall in self.walls:
                 wall.draw()
-            timer = timerFont.render(f'{self.wave.count(1)}', True, [255] * 3)
+            timer = timerFont.render(f'{len(self.wave) - self.wave.count(0)}',
+                                     True, [255] * 3)
             timerSurface = timer.get_rect()
             timerSurface.center = ((self.width//2, self.height*1//20))
             if pygame.time.get_ticks() % 1000 == 0:
                 if len(self.wave) > 0:
                     if self.wave[-1] == 1:
                         self.enemies.add(Enemy(self.screen, (45,45)))
+                    elif self.wave[-1] == 2:
+                        self.enemies.add(EmptyEnemy(self.screen, (45,45)))
                     self.wave.pop()
                 elif len(self.enemies) == 0:
                     self.diff += 2
@@ -359,6 +362,10 @@ class EndScreen(Mode):
             self.screen.blit(titleText, textSurface)
             self.screen.blit(subTitle, subSurface)
             pygame.display.flip()
+
+class SandBox(Mode):
+    def __init__(self, control, screen, clock):
+        super().__init__(control, screen, clock)
 
 # Title/splashscreen
 class TitleScreen(Mode):

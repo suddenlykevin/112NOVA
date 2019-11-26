@@ -24,6 +24,7 @@ class MapState(object):
     def __eq__(self, other):
         return (other != None) and self.__dict__ == other.__dict__
 
+# generates a path given player position
 class MapGenerator(object):
     def __init__(self, rows, cols, margin, player):
         self.startState = MapState([(0,0)])
@@ -107,6 +108,7 @@ class WaveState(object):
     def __eq__(self, other):
         return (other != None) and self.__dict__ == other.__dict__
 
+# generates a sequence of enemies given difficulty and length
 class WaveGenerator(object):
     def __init__(self, diff, length, maxDiff):
         self.startState = WaveState([0] * length, 0)
