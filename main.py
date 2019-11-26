@@ -53,13 +53,22 @@ class Mode(object):
 class PauseScreen(Mode):
     def __init__(self, control, screen, clock):
         super().__init__(control, screen, clock)
-        self.buttons = pygame.sprite.Group(RoundButton(screen, (100, 100),
+        self.buttons = pygame.sprite.Group(RoundButton(screen, (self.width//4,
+                                                                self.height -
+                                                                self.height//5),
                                                         50, "Menu",
                                                        [128] * 3, self.menu))
 
     # Return to menu (triggered by button)
     def menu(self):
         self.control.setActiveMode(self.control.splashMode)
+
+    def paused(self):
+        self.buttons = pygame.sprite.Group(RoundButton(self.screen, (self.width//4,
+                                                                self.height -
+                                                                self.height//5),
+                                                       50, "Menu",
+                                                       [128] * 3, self.menu))
 
     # Main loop
     def play(self):
@@ -98,7 +107,10 @@ class NovaGame(Mode):
         self.length = 18
         self.maxDiff = 1
         self.waveNum = 1
+        self.title = Title(self.screen, "Wave 1")
         self.shrinkRate = -0.005
+        self.currentWall = (None, False)
+        self.walls = pygame.sprite.Group()
 
     # updates global physics acting on each planet -- maybe create vector field?
     def updatePhysics(self):
@@ -183,6 +195,9 @@ class NovaGame(Mode):
                 return True
         return False
 
+    def paused(self):
+        pass
+
     def checkCollisions(self):
         hit_list = []
         for planet in self.planets:
@@ -240,17 +255,23 @@ class NovaGame(Mode):
             timerSurface = timer.get_rect()
             timerSurface.center = ((self.width//2, self.height*1//20))
             if pygame.time.get_ticks() % 1000 == 0:
-                print(self.wave)
                 if len(self.wave) > 0:
                     if self.wave[-1] == 1:
                         self.enemies.add(Enemy(self.screen, (45,45)))
                     self.wave.pop()
-                else:
+                elif len(self.enemies) == 0:
                     self.diff += 2
                     self.length += 2
                     self.wave = WaveGenerator(self.diff, self.length,
                                               self.maxDiff).solve()
+                    self.map = Map(self.screen, 4)
                     self.waveNum += 1
+                    self.title = Title(self.screen, f"Wave {self.waveNum}")
+            if self.title != None:
+                self.screen.blit(self.title.image, self.title.rect)
+                self.title.update()
+                if self.title.tran <= 0:
+                    self.title = None
             self.screen.blit(timer, timerSurface)
             self.player.drawGUI()
             self.player.draw()
@@ -262,17 +283,41 @@ class EndScreen(Mode):
         super().__init__(control, screen, clock)
         self.status = 0
         self.score = 0
+        self.buttons = pygame.sprite.Group(
+            RoundButton(screen,
+                        [self.width // 5, self.height - self.height // 5],
+                        50, "Play Again", [255, 0, 0], self.game),
+            RoundButton(screen, [self.width - self.width // 5, self.height -
+                                 self.height // 5], 50, "Exit", [255, 0, 0],
+                        self.quit)
+        )
 
     def checkEvents(self):
         for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                self.control.setActiveMode(self.control.gameMode)
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                self.control.setActiveMode(self.control.gameMode)
-            elif event.type == pygame.QUIT:
+            if event.type == pygame.QUIT:
                 pygame.display.quit()
                 pygame.quit()
                 sys.exit()
+
+    def quit(self):
+        pygame.display.quit()
+        pygame.quit()
+        sys.exit()
+
+    def game(self):
+        self.control.gameMode = NovaGame(self.control, self.screen, self.clock)
+        self.control.setActiveMode(self.control.gameMode)
+
+    def paused(self):
+        self.buttons = pygame.sprite.Group(
+            RoundButton(self.screen,
+                        [self.width // 5, self.height - self.height // 5],
+                        50, "Play Again", [255, 0, 0], self.game),
+            RoundButton(self.screen, [self.width - self.width // 5,
+                                      self.height -
+                                 self.height // 5], 50, "Exit", [255, 0, 0],
+                        self.quit)
+        )
 
     def play(self):
         while self.running:
@@ -280,15 +325,21 @@ class EndScreen(Mode):
             littleFont = pygame.font.Font('Linebeam.ttf', 18)
             self.checkEvents()
             self.screen.fill([255, 255, 255])
-            titleText = titleFont.render('NOVA', True, [
+            if self.status == 1:
+                text = 'GAME OVER!'
+            else:
+                text = 'YAY DUMMY'
+            titleText = titleFont.render(text, True, [
                 (pygame.time.get_ticks() // 25) % 255] * 3)
-            subTitle = littleFont.render('''PRESS ANYWHERE TO START GAME''',
+            subTitle = littleFont.render(f'SCORE: {self.score}',
                                          True,
                                          [(pygame.time.get_ticks() // 25) % 255] * 3)
             textSurface = titleText.get_rect()
             subSurface = subTitle.get_rect()
             subSurface.center = ((self.width // 2, self.height * 3 // 5))
             textSurface.center = ((self.width // 2, self.height // 2))
+            self.buttons.update()
+            self.buttons.draw(self.screen)
             self.screen.blit(titleText, textSurface)
             self.screen.blit(subTitle, subSurface)
             pygame.display.flip()
@@ -297,23 +348,39 @@ class EndScreen(Mode):
 class TitleScreen(Mode):
     def __init__(self, control, screen, clock):
         super().__init__(control, screen, clock)
-        # self.buttons = pygame.sprite.Group(
-        # RoundButton(),
-        # RoundButton(),
-        # RoundButton(),
-        # RoundButton()
-        # )
-    
+        self.buttons = pygame.sprite.Group(
+        RoundButton(screen, [self.width//5, self.height - self.height//5],
+                    50, "Play", [255, 0, 0], self.game),
+        RoundButton(screen, [self.width - self.width // 5, self.height -
+                    self.height // 5], 50, "Exit", [255, 0, 0], self.quit)
+        )
+
     def checkEvents(self):
         for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                self.control.setActiveMode(self.control.gameMode)
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                self.control.setActiveMode(self.control.gameMode)
-            elif event.type == pygame.QUIT:
+            if event.type == pygame.QUIT:
                 pygame.display.quit()
                 pygame.quit()
                 sys.exit()
+
+    def quit(self):
+        pygame.display.quit()
+        pygame.quit()
+        sys.exit()
+
+    def game(self):
+        self.control.gameMode = NovaGame(self.control, self.screen, self.clock)
+        self.control.setActiveMode(self.control.gameMode)
+
+    def paused(self):
+        self.buttons = pygame.sprite.Group(
+            RoundButton(self.screen,
+                        [self.width // 5, self.height - self.height // 5],
+                        50, "Play", [255, 0, 0], self.game),
+            RoundButton(self.screen, [self.width - self.width // 5,
+                                      self.height -
+                                 self.height // 5], 50, "Exit", [255, 0, 0],
+                        self.quit)
+        )
 
     def play(self):
         titleFont = pygame.font.Font('Linebeam.ttf', 48)
@@ -322,14 +389,16 @@ class TitleScreen(Mode):
             self.checkEvents()
             self.screen.fill([255,255,255])
             titleText = titleFont.render('NOVA', True, [(pygame.time.get_ticks()//25) % 255] * 3)
-            subTitle = littleFont.render('''PRESS ANYWHERE TO START GAME''', True, 
-                                        [(pygame.time.get_ticks()//25) % 255] * 3)
+            subTitle = littleFont.render('''PRESS AND HOLD TO ACTIVATE BUTTONS''', True, [(pygame.time.get_ticks()//25) % 255] * 3)
             textSurface = titleText.get_rect()
             subSurface = subTitle.get_rect()
             subSurface.center = ((self.width//2, self.height*3//5))
             textSurface.center = ((self.width//2, self.height//2))
             self.screen.blit(titleText, textSurface)
             self.screen.blit(subTitle, subSurface)
+            self.buttons.update()
+            self.buttons.draw(self.screen)
+            self.clock.tick()
             pygame.display.flip()
 
 class ModeController(object):
@@ -342,10 +411,19 @@ class ModeController(object):
         self.gameMode = NovaGame(self, self.screen, self.clock)
         self.pauseMode = PauseScreen(self, self.screen, self.clock)
         self.endMode = EndScreen(self, self.screen, self.clock)
+        self.activeMode = None
         self.setActiveMode(self.splashMode)
 
     def setActiveMode(self, mode):
-        mode.play()
+        if self.activeMode == None:
+            self.activeMode = mode
+            self.activeMode.play()
+        else:
+            self.activeMode.running = False
+            self.activeMode.paused()
+            self.activeMode = mode
+            self.activeMode.running = True
+            self.activeMode.play()
 
 def runNovaGame():
     pygame.init()

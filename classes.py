@@ -49,27 +49,6 @@ class Player(pygame.sprite.Sprite):
     def draw(self):
         self.screen.blit(self.image,self.rect)
 
-    def retrieveSprites(self):
-        spritesheet = Image.open("4Njmyen.png")
-        dx, dy = 96, 104
-        # 8 animations, each with a maximum of 10 frames
-        spriteAnims = 8
-        maxFrames = 10
-        sprites = []
-        # splits animation into 8 strips
-        for strip in range(spriteAnims):
-            spritestrip = []
-            for i in range(maxFrames):
-                spritestrip.append(spritesheet.crop((dx * i, dy * strip,
-                                                     dx * (i + 1),
-                                                     dy * (strip + 1))))
-            sprites.append(spritestrip)
-        # scales each sprite down by half
-        for row in range(spriteAnims):
-            for col in range(maxFrames):
-                sprites[row][col] = sprites[row][col].resize(48, 52)
-        return sprites
-
 class Planet(pygame.sprite.Sprite):
     def __init__(self, screen, pos):
         super().__init__()
@@ -182,9 +161,14 @@ class Button(pygame.sprite.Sprite):
         self.size = size
         self.message = message
         self.action = action
+        self.font = pygame.font.Font('Linebeam.ttf', 20)
         self.image = pygame.Surface(size)
         self.image.fill(color)
         self.rect = self.image.get_rect()
+        textSurf = self.font.render(self.message, True, [255, 255, 255])
+        textRect = textSurf.get_rect()
+        textRect.center = ((self.size[0]//2, self.size[1]//2))
+        self.image.blit(textSurf, textRect)
         self.rect.topleft = pos
         self.screen = screen
 
@@ -204,7 +188,7 @@ class RoundButton(pygame.sprite.Sprite):
         self.action = action
         self.color = color
         self.screen = screen
-        self.font = pygame.font.Font('Linebeam.ttf',20)
+        self.font = pygame.font.Font('Linebeam.ttf', 20)
         self.refreshSprite()
 
     def refreshSprite(self):
@@ -234,6 +218,24 @@ class RoundButton(pygame.sprite.Sprite):
                 self.radius -= 3
                 self.refreshSprite()
 
-class Title(pygame.sprite.Sprite):
-    def __init__(self, screen, message, time):
+class Wall(pygame.sprite.Sprite):
+    def __init__(self, screen, pos0, pos1):
         pass
+
+class Title(pygame.sprite.Sprite):
+    def __init__(self, screen, message):
+        self.screen = screen
+        self.message = message
+        self.width, self.height = screen.get_width(), screen.get_height()
+        self.font = pygame.font.Font('Linebeam.ttf', 48)
+        self.tran = 255
+        self.refreshSprite()
+
+    def refreshSprite(self):
+        self.image = self.font.render(self.message, True, [self.tran] * 4)
+        self.rect = self.image.get_rect()
+        self.rect.center = ((self.width//2, self.height//2))
+
+    def update(self):
+        self.tran -= 0.1
+        self.refreshSprite()
