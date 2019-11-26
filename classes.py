@@ -4,6 +4,10 @@ import pygame
 
 from mapgenerator import *
 
+def distance(pos0, pos1):
+    x = pos0[0] - pos1[0]
+    y = pos0[1] - pos1[1]
+    return (x**2 + y**2)**0.5
 
 # holds player position and attributes
 class Player(pygame.sprite.Sprite):
@@ -11,6 +15,7 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
         self.screen = screen
         self.pos = pos
+        self.score = 0
         self.fuel = 10 ** 6
         self.health = 10
         self.image = pygame.Surface([self.screen.get_width()/8] * 2,
@@ -151,7 +156,7 @@ class Map(pygame.sprite.Group):
         return spriteList
 
 # test subclass of enemy
-class BadEnemy(Enemy):
+class AcceleratingEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
 
@@ -164,7 +169,7 @@ class EnemyGroup(pygame.sprite.Group):
             sprite.move(time)
 
 class Button(pygame.sprite.Sprite):
-    def __init__(self, pos, size, message, color, action = None):
+    def __init__(self, screen, pos, size, message, color, action = None):
         super().__init__()
         self.pos = pos
         self.size = size
@@ -174,6 +179,7 @@ class Button(pygame.sprite.Sprite):
         self.image.fill(color)
         self.rect = self.image.get_rect()
         self.rect.topleft = pos
+        self.screen = screen
 
     def update(self):
         mouse = pygame.mouse.get_pos()
@@ -183,13 +189,14 @@ class Button(pygame.sprite.Sprite):
                 self.action()
 
 class RoundButton(pygame.sprite.Sprite):
-    def __init__(self, pos, radius, message, color, action = None):
+    def __init__(self, screen, pos, radius, message, color, action = None):
         super().__init__()
         self.pos = pos
         self.radius = radius
         self.message = message
         self.action = action
         self.color = color
+        self.screen = screen
         self.refreshSprite()
 
     def refreshSprite(self):
@@ -205,6 +212,11 @@ class RoundButton(pygame.sprite.Sprite):
         if self.rect.collidepoint(mouse) and (click[0] == 1):
             self.radius += 3
             self.refreshSprite()
+            corner = (self.screen.get_width(), self.screen.get_height())
+            if (distance(self.pos, corner) < self.radius and
+                distance(self.pos, (0, 0)) < self.radius):
+                if self.action != None:
+                    self.action()
         else:
             if self.radius > 52:
                 self.radius -= 3

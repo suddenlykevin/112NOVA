@@ -1,4 +1,5 @@
 import copy, random
+from classes import *
 
 # https://www.cs.cmu.edu/~112/notes/notes-recursion-part2.html#Backtracking
 class MapState(object):
@@ -82,3 +83,57 @@ class MapGenerator(object):
                     if result != None:
                         return result
             return None
+
+class WaveState(object):
+    def __init__(self, sequence):
+        self.sequence = sequence
+
+    def __hash__(self):
+        return hash(str(self.__dict__))
+
+    def __repr__(self):
+        return str(self.__dict__)
+
+    def __eq__(self, other):
+        return (other != None) and self.__dict__ == other.__dict__
+
+class WaveGenerator(object):
+    def __init__(self, diff, length, maxDiff):
+        self.startState = MapState([0] * length)
+        self.diff = diff
+        self.length = length
+        self.maxDiff = maxDiff
+
+    def solveFromState(self, state):
+        if state in self.states:
+            return None
+        self.states.add(state)
+        if self.isSolutionState(state):
+            return state
+        else:
+            for move in self.getLegalMoves(state):
+                childState = self.doMove(state, move)
+                if self.stateSatisfiesConstraints(childState):
+                    result = self.solveFromState(childState)
+                    if result != None:
+                        return result
+            return None
+
+    def stateSatisfiesConstraints(self, state):
+        pass
+
+    def doMove(self, state, move):
+        pass
+
+    def isSolutionState(self, state):
+        pass
+
+    def getLegalMoves(self, state):
+        pass
+
+    def solve(self):
+        self.states = set()
+        self.solutionState = self.solveFromState(self.startState)
+        if self.solutionState == None:
+            return None
+        return self.solutionState.sequence
