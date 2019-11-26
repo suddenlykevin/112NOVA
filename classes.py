@@ -1,8 +1,15 @@
+#################################################
+# NOVA TP2 Deliverable (Classes)
+#
+# Your name: Kevin Xie
+# Your andrew id: kevinx
+#################################################
+
 import math
 
 import pygame
 
-from mapgenerator import *
+from backtrackers import *
 
 def distance(pos0, pos1):
     x = pos0[0] - pos1[0]
@@ -197,12 +204,17 @@ class RoundButton(pygame.sprite.Sprite):
         self.action = action
         self.color = color
         self.screen = screen
+        self.font = pygame.font.Font('Linebeam.ttf',20)
         self.refreshSprite()
 
     def refreshSprite(self):
         self.image = pygame.Surface([self.radius * 2] * 2, pygame.SRCALPHA)
         pygame.draw.circle(self.image, self.color, (self.radius, self.radius),
                            self.radius)
+        textSurf = self.font.render(self.message, True, [255, 255, 255])
+        textRect = textSurf.get_rect()
+        textRect.center = ((self.radius, self.radius))
+        self.image.blit(textSurf, textRect)
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
 
@@ -221,3 +233,7 @@ class RoundButton(pygame.sprite.Sprite):
             if self.radius > 52:
                 self.radius -= 3
                 self.refreshSprite()
+
+class Title(pygame.sprite.Sprite):
+    def __init__(self, screen, message, time):
+        pass

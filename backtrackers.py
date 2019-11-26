@@ -1,3 +1,10 @@
+#################################################
+# NOVA TP2 Deliverable (Backtrackers)
+#
+# Your name: Kevin Xie
+# Your andrew id: kevinx
+#################################################
+
 import copy, random
 from classes import *
 
@@ -85,8 +92,9 @@ class MapGenerator(object):
             return None
 
 class WaveState(object):
-    def __init__(self, sequence):
+    def __init__(self, sequence, n):
         self.sequence = sequence
+        self.n = n
 
     def __hash__(self):
         return hash(str(self.__dict__))
@@ -99,7 +107,7 @@ class WaveState(object):
 
 class WaveGenerator(object):
     def __init__(self, diff, length, maxDiff):
-        self.startState = MapState([0] * length)
+        self.startState = WaveState([0] * length, 0)
         self.diff = diff
         self.length = length
         self.maxDiff = maxDiff
@@ -120,16 +128,20 @@ class WaveGenerator(object):
             return None
 
     def stateSatisfiesConstraints(self, state):
-        pass
+        return sum(state.sequence) <= self.diff and state.n < self.length
 
     def doMove(self, state, move):
-        pass
+        newSequence = copy.copy(state.sequence)
+        newSequence[state.n] = move
+        return WaveState(newSequence, state.n + 1)
 
     def isSolutionState(self, state):
-        pass
+        return sum(state.sequence) == self.diff
 
     def getLegalMoves(self, state):
-        pass
+        moves = list(range(self.maxDiff + 1))
+        random.shuffle(moves)
+        return moves
 
     def solve(self):
         self.states = set()

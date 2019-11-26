@@ -1,5 +1,5 @@
 #################################################
-# NOVA TP1 Deliverable
+# NOVA TP2 Deliverable
 #
 # Your name: Kevin Xie
 # Your andrew id: kevinx
@@ -8,6 +8,12 @@
 import sys
 
 from classes import *
+
+#################################################
+#
+# Helper Functions
+#
+#################################################
 
 # matches sign of a given value to the determinant
 def matchSign(value, determ):
@@ -25,6 +31,16 @@ def dist(object1, object2):
     r = pygame.math.Vector2(object2[0] - object1[0], object2[1] - object1[1])
     return r
 
+#################################################
+#
+# Pygame "Mode" Classes
+#
+# Loosely adapted from ModalApp:
+# https://www.cs.cmu.edu/~112/notes/notes-animations-part2.html#subclassingModalApp
+#
+#################################################
+
+# Mode superclass initializes all the default values
 class Mode(object):
     def __init__(self, control, screen, clock):
         self.control = control
@@ -33,12 +49,19 @@ class Mode(object):
         self.clock = clock
         self.width, self.height = screen.get_width(), screen.get_height()
 
+# Pauses game
 class PauseScreen(Mode):
     def __init__(self, control, screen, clock):
         super().__init__(control, screen, clock)
         self.buttons = pygame.sprite.Group(RoundButton(screen, (100, 100),
-                                                        50, "Hello", [128] * 3))
+                                                        50, "Menu",
+                                                       [128] * 3, self.menu))
 
+    # Return to menu (triggered by button)
+    def menu(self):
+        self.control.setActiveMode(self.control.splashMode)
+
+    # Main loop
     def play(self):
         while self.running:
             self.screen.fill([255,255,255])
@@ -57,6 +80,7 @@ class PauseScreen(Mode):
 
 # main gameplay
 class NovaGame(Mode):
+    # Initial attributes
     def __init__(self, control, screen, clock):
         super().__init__(control, screen, clock)
         self.player = Player(self.screen, (self.width * 7 / 9, self.height * 7 /
@@ -69,6 +93,11 @@ class NovaGame(Mode):
         self.growRate = 0.2
         self.map = Map(self.screen, 4)
         self.currentPlanet = [None, False]
+        self.wave = WaveGenerator(10,18,1).solve()
+        self.diff = 10
+        self.length = 18
+        self.maxDiff = 1
+        self.waveNum = 1
         self.shrinkRate = -0.005
 
     # updates global physics acting on each planet -- maybe create vector field?
@@ -173,6 +202,10 @@ class NovaGame(Mode):
                 self.control.endMode.status = 1
                 self.control.endMode.score = self.player.score
                 self.control.setActiveMode(self.control.endMode)
+        for enemy in self.enemies:
+            if not (0 < enemy.pos[1] < self.height and 0 < enemy.pos[0] <
+                    self.width):
+                self.enemies.remove(enemy)
 
     def growPlanet(self):
         for planet in self.planets:
@@ -203,9 +236,21 @@ class NovaGame(Mode):
             self.map.draw(self.screen)
             self.planets.draw(self.screen)
             self.enemies.draw(self.screen)
-            timer = timerFont.render(f'{int(self.timer)}', True, [255] * 3)
+            timer = timerFont.render(f'{self.wave.count(1)}', True, [255] * 3)
             timerSurface = timer.get_rect()
             timerSurface.center = ((self.width//2, self.height*1//20))
+            if pygame.time.get_ticks() % 1000 == 0:
+                print(self.wave)
+                if len(self.wave) > 0:
+                    if self.wave[-1] == 1:
+                        self.enemies.add(Enemy(self.screen, (45,45)))
+                    self.wave.pop()
+                else:
+                    self.diff += 2
+                    self.length += 2
+                    self.wave = WaveGenerator(self.diff, self.length,
+                                              self.maxDiff).solve()
+                    self.waveNum += 1
             self.screen.blit(timer, timerSurface)
             self.player.drawGUI()
             self.player.draw()
@@ -239,8 +284,7 @@ class EndScreen(Mode):
                 (pygame.time.get_ticks() // 25) % 255] * 3)
             subTitle = littleFont.render('''PRESS ANYWHERE TO START GAME''',
                                          True,
-                                         [(
-                                                  pygame.time.get_ticks() // 25) % 255] * 3)
+                                         [(pygame.time.get_ticks() // 25) % 255] * 3)
             textSurface = titleText.get_rect()
             subSurface = subTitle.get_rect()
             subSurface.center = ((self.width // 2, self.height * 3 // 5))
