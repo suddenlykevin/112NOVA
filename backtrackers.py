@@ -9,6 +9,8 @@ import copy, random
 from classes import *
 
 # https://www.cs.cmu.edu/~112/notes/notes-recursion-part2.html#Backtracking
+# Backtrackers derived from Generic Backtracker
+
 class MapState(object):
     def __init__(self, coords):
         self.coords = coords

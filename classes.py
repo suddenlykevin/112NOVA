@@ -146,6 +146,22 @@ class AcceleratingEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
 
+class DestructiveEnemy(Enemy):
+    def __init__(self, screen, pos):
+        super().__init__(screen, pos)
+
+class EmptyEnemy(Enemy):
+    def __init__(self, screen, pos):
+        super().__init__(screen, pos)
+
+class ResistiveEnemy(Enemy):
+    def __init__(self, screen, pos):
+        super().__init__(screen, pos)
+
+class SpeedyEnemy(Enemy):
+    def __init__(self, screen, pos):
+        super().__init__(screen, pos)
+
 class EnemyGroup(pygame.sprite.Group):
     def __init__(self, *sprites):
         super().__init__(sprites)
@@ -220,7 +236,14 @@ class RoundButton(pygame.sprite.Sprite):
 
 class Wall(pygame.sprite.Sprite):
     def __init__(self, screen, pos0, pos1):
-        pass
+        super().__init__()
+        self.screen = screen
+        self.pos0 = pos0
+        self.pos1 = pos1
+
+    def draw(self):
+        if self.pos1 != None:
+            pygame.draw.line(self.screen, [255,0,0], self.pos0, self.pos1)
 
 class Title(pygame.sprite.Sprite):
     def __init__(self, screen, message):

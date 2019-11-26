@@ -3,6 +3,10 @@
 #
 # Your name: Kevin Xie
 # Your andrew id: kevinx
+#
+# Asset Sources:
+# Font : https://www.dafont.com/linear-beam.font
+#
 #################################################
 
 import sys
@@ -168,12 +172,20 @@ class NovaGame(Mode):
                         self.currentPlanet[0].update(0)
                         self.planets.add(self.currentPlanet[0])
                 elif pygame.mouse.get_pressed()[2]:
-                    self.enemies.add(Enemy(self.screen, pygame.mouse.get_pos()))
+                    if (not self.isInPlanet(pygame.mouse.get_pos()) and not
+                            self.isInPath(pygame.mouse.get_pos())):
+                        self.currentWall = [Wall(self.screen,
+                                                   pygame.mouse.get_pos(),
+                                                   None), True]
+                        self.walls.add(self.currentWall[0])
             elif event.type == pygame.MOUSEBUTTONUP:
                 if self.currentPlanet[1]:
                     self.currentPlanet[1] = False
                     self.currentPlanet[0].mass = (2 * math.pi * 
                     (self.currentPlanet[0].radius**2) * self.planetDensity)
+                elif self.currentWall[1]:
+                    self.currentWall[1] = False
+                    self.currentWall[0].pos1 = pygame.mouse.get_pos()
             elif event.type == pygame.QUIT:
                 pygame.display.quit()
                 pygame.quit()
@@ -251,6 +263,10 @@ class NovaGame(Mode):
             self.map.draw(self.screen)
             self.planets.draw(self.screen)
             self.enemies.draw(self.screen)
+            if self.currentWall[1]:
+                self.currentWall[0].pos1 = pygame.mouse.get_pos()
+            for wall in self.walls:
+                wall.draw()
             timer = timerFont.render(f'{self.wave.count(1)}', True, [255] * 3)
             timerSurface = timer.get_rect()
             timerSurface.center = ((self.width//2, self.height*1//20))
