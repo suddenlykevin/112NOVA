@@ -9,7 +9,7 @@ import math
 
 import pygame
 
-from backtrackers import *
+from algorithms import *
 
 def distance(pos0, pos1):
     x = pos0[0] - pos1[0]
@@ -54,7 +54,7 @@ class Planet(pygame.sprite.Sprite):
         super().__init__()
         self.screen = screen
         self.pos = pos
-        self.density = 3 * 10 ** 4
+        self.density = 10 ** 4
         self.radius = 0
         self.mass = 0
 
@@ -78,9 +78,14 @@ class Enemy(pygame.sprite.Sprite):
         super().__init__()
         self.screen = screen
         self.pos = pos
+        self.pathSpeed = random.uniform(0.075, 0.15)
         self.velocity = pygame.math.Vector2(0,0)
+        self.pathVelocity = pygame.math.Vector2(0,0)
         self.mass = 10
         self.radius = 10
+        self.damage = 1
+        self.gravityMult = 1
+        self.gravityAcc = pygame.math.Vector2(0,0)
         self.image = pygame.Surface([self.radius * 2, self.radius * 2],
                                     pygame.SRCALPHA)
         self.image.fill([255, 255, 255, 0])
@@ -88,17 +93,34 @@ class Enemy(pygame.sprite.Sprite):
                            self.radius)
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
+        self.resist = False
 
     def move(self, time):
+        if not self.resist:
+            mult = 0
+        else:
+            mult = 1
+        self.velocity = self.pathVelocity * mult + self.gravityAcc * self.gravityMult
         self.pos = tuple((self.pos[i] + self.velocity[i] * time) for i in range(
             len(self.velocity)))
         self.rect.center = self.pos
 
-    def draw(self):
-        pass
+    def gravitate(self, vector, resist):
+        # If gravity = 0, gravity acceleration = 0
+        if vector.length() == 0 :
+            self.gravityAcc = pygame.math.Vector2(0,0)
+        # if in path, resist
+        if resist:
+            self.resist = True
+            self.gravityAcc += vector * 0.3 * resist
+        elif self.resist:
+            self.resist = False
+            self.gravityAcc = vector
+        else:
+            self.gravityAcc += vector
 
 class PathPiece(pygame.sprite.Sprite):
-    directions = [[0.1,0], [0,0.1], [-0.1,0], [0,-0.1]]
+    directions = [[1,0], [0,1], [-1,0], [0,-1]]
     def __init__(self, pos, size, orientation, corner):
         super().__init__()
         self.corner = corner
@@ -119,7 +141,7 @@ class Map(pygame.sprite.Group):
         super().__init__(self.spriteMap)
 
     def retrieveSprites(self):
-        spriteList = set()
+        spriteList = []
         for i in range(len(self.coords)):
             if i < len(self.coords) - 1:
                 if self.coords[i][0] < self.coords[i+1][0]:
@@ -137,18 +159,22 @@ class Map(pygame.sprite.Group):
                         self.coords[i-1][1] and orientation in (0,2)):
                     corner = True
             transCoord = [elem * self.tileSize for elem in self.coords[i]]
-            spriteList.add(PathPiece(transCoord, self.tileSize, orientation,
+            spriteList.append(PathPiece(transCoord, self.tileSize, orientation,
                                      corner))
         return spriteList
 
 # test subclass of enemy
-class AcceleratingEnemy(Enemy):
-    def __init__(self, screen, pos):
-        super().__init__(screen, pos)
-
 class DestructiveEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
+        self.mass = 0
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, [255, 0, 0], (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
 
 class EmptyEnemy(Enemy):
     def __init__(self, screen, pos):
@@ -166,10 +192,26 @@ class EmptyEnemy(Enemy):
 class ResistiveEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
+        self.gravityMult = 0.7
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, [64, 64, 64], (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
 
 class SpeedyEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
+        self.pathSpeed = random.uniform(0.125, 0.2)
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, [0, 0, 255], (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
 
 def wallBetweenPos(pos0, pos1, wall):
     if wall.pos1 == None:
@@ -259,7 +301,7 @@ class RoundButton(pygame.sprite.Sprite):
         mouse = pygame.mouse.get_pos()
         click = pygame.mouse.get_pressed()
         if self.rect.collidepoint(mouse) and (click[0] == 1):
-            self.radius += 3
+            self.radius += self.radius/50
             self.refreshSprite()
             corner = (self.screen.get_width(), self.screen.get_height())
             if (distance(self.pos, corner) < self.radius and
@@ -270,7 +312,7 @@ class RoundButton(pygame.sprite.Sprite):
                     self.action()
         else:
             if self.radius > 52:
-                self.radius -= 3
+                self.radius -= self.radius/50
                 self.refreshSprite()
 
 class Wall(pygame.sprite.Sprite):
@@ -286,6 +328,7 @@ class Wall(pygame.sprite.Sprite):
 
 class Title(pygame.sprite.Sprite):
     def __init__(self, screen, message):
+        super().__init__()
         self.screen = screen
         self.message = message
         self.width, self.height = screen.get_width(), screen.get_height()
@@ -301,3 +344,55 @@ class Title(pygame.sprite.Sprite):
     def update(self):
         self.tran -= 0.1
         self.refreshSprite()
+
+class Customer(pygame.sprite.Sprite):
+    def __init__(self, screen, pos, options):
+        super().__init__()
+
+class Parcel(pygame.sprite.Sprite):
+    def __init__(self, color, pos, key):
+        super().__init__()
+        self.pos = pos
+        self.velocity = pygame.math.Vector2(0,0)
+        self.mass = 10
+        self.radius = 10
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, color, (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
+        self.key = key
+        self.trailPoints = None
+
+    def move(self, time):
+        self.pos = tuple((self.pos[i] + self.velocity[i] * time) for i in range(
+            len(self.velocity)))
+        self.rect.center = self.pos
+
+    def draw(self):
+        pass
+
+class Scavenger(pygame.sprite.Sprite):
+    def __init__(self, color, pos):
+        super().__init__()
+        self.pos = pos
+        self.velocity = pygame.math.Vector2(0.1,0)
+        self.mass = 10
+        self.radius = 10
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, color, (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
+
+    def move(self, time):
+        self.pos = tuple((self.pos[i] + self.velocity[i] * time) for i in range(
+            len(self.velocity)))
+        self.rect.center = self.pos
+
+    def draw(self):
+        pass
