@@ -24,7 +24,9 @@ class Player(pygame.sprite.Sprite):
         self.pos = pos
         self.score = 0
         self.fuel = 10 ** 6
-        self.health = 10
+        self.reserveFuel = (10 ** 6)
+        self.repairFuel = 3
+        self.health = 8
         self.image = pygame.Surface([self.screen.get_width()/8] * 2,
                                     pygame.SRCALPHA)
         self.image.fill([255, 255, 255, 0])
@@ -36,17 +38,44 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.topleft = self.pos
 
-    def drawGUI(self):
+    def drawGUI(self, reserve = False):
         ratio = self.fuel / 10 ** 6
         fuelBar = pygame.Rect(0, self.screen.get_height() - 10,
                               self.screen.get_width() * ratio, 10)
         pygame.draw.rect(self.screen, [255, 127, 0], fuelBar)
-        healthRatio = self.health / 10
+        healthRatio = self.health / 8
         healthBar = pygame.Rect(0, self.screen.get_height() - 20,
                                 self.screen.get_width() * healthRatio, 10)
         pygame.draw.rect(self.screen, [255, 0, 32], healthBar)
+        if reserve == True:
+            reserveRatio = self.reserveFuel / ((10 ** 6))
+            reserveBar = pygame.Rect(0, self.screen.get_height() - 30,
+                                    self.screen.get_width() * reserveRatio, 10)
+            pygame.draw.rect(self.screen, [0, 255, 0], reserveBar)
+        elif self.health <= 2 or self.fuel <= (10 ** 6) / 4:
+            self.font = pygame.font.Font('Linebeam.ttf', 18)
+            rPrompt = pygame.Surface((15,30))
+            rPrompt.fill([255, 127, 0])
+            rect = rPrompt.get_rect()
+            rect.bottomleft = (15, self.screen.get_height() - 25)
+            textSurf = self.font.render(f"{self.repairFuel}", True, [255, 255,
+                                                                  255])
+            textRect = textSurf.get_rect()
+            textRect.center = ((7.5, 15))
+            rPrompt.blit(textSurf, textRect)
+            self.screen.blit(rPrompt, rect)
 
     def draw(self):
+        self.image = pygame.Surface([self.screen.get_width() / 8] * 2,
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        self.radius = self.screen.get_width() / 16
+        pygame.draw.circle(self.image, [0, 0, 255],
+                           (self.screen.get_width() / 16,
+                            self.screen.get_width() / 16),
+                           self.screen.get_width() / 16)
+        self.rect = self.image.get_rect()
+        self.rect.topleft = self.pos
         self.screen.blit(self.image,self.rect)
 
 class Planet(pygame.sprite.Sprite):
@@ -54,7 +83,7 @@ class Planet(pygame.sprite.Sprite):
         super().__init__()
         self.screen = screen
         self.pos = pos
-        self.density = 10 ** 4
+        self.density = 7 * 10 ** 3
         self.radius = 0
         self.mass = 0
 
@@ -63,6 +92,8 @@ class Planet(pygame.sprite.Sprite):
 
     def update(self, rate):
         self.radius += rate
+        if rate < 0 and self.radius <= 2:
+            return
         self.mass = math.pi * (self.radius ** 2) * self.density
         self.image = pygame.Surface([self.radius * 2, self.radius * 2],
                                     pygame.SRCALPHA)
@@ -133,8 +164,11 @@ class PathPiece(pygame.sprite.Sprite):
         self.direction = PathPiece.directions[orientation]
 
 class Map(pygame.sprite.Group):
-    def __init__(self, screen, diff):
-        self.coords = MapGenerator(8, 8, diff, (7, 7)).solve()
+    def __init__(self, screen, diff, autoGenerate = (True, None)):
+        if autoGenerate[0] == True:
+            self.coords = MapGenerator(8, 8, diff, (7, 7)).solve()
+        else:
+            self.coords = autoGenerate[1]
         self.screen = screen
         self.tileSize = self.screen.get_width() // 9
         self.spriteMap = self.retrieveSprites()
@@ -256,6 +290,7 @@ class Button(pygame.sprite.Sprite):
         self.size = size
         self.message = message
         self.action = action
+        self.color = color
         self.font = pygame.font.Font('Linebeam.ttf', 20)
         self.image = pygame.Surface(size)
         self.image.fill(color)
@@ -266,13 +301,28 @@ class Button(pygame.sprite.Sprite):
         self.image.blit(textSurf, textRect)
         self.rect.topleft = pos
         self.screen = screen
+        self.pressed = False
+
+    def updateText(self, text):
+        self.image = pygame.Surface(self.size)
+        self.image.fill(self.color)
+        self.rect = self.image.get_rect()
+        textSurf = self.font.render(text, True, [255, 255, 255])
+        textRect = textSurf.get_rect()
+        textRect.center = ((self.size[0] // 2, self.size[1] // 2))
+        self.image.blit(textSurf, textRect)
+        self.rect.topleft = self.pos
 
     def update(self):
         mouse = pygame.mouse.get_pos()
         click = pygame.mouse.get_pressed()
-        if self.rect.collidepoint(mouse) and (click[0] == 1):
+        if self.rect.collidepoint(mouse) and (click[0] == 0 and self.pressed):
             if self.action != None:
                 self.action()
+        if click[0] == 1:
+            self.pressed = True
+        else:
+            self.pressed = False
 
 class RoundButton(pygame.sprite.Sprite):
     def __init__(self, screen, pos, radius, message, color, action = None):
@@ -325,6 +375,14 @@ class Wall(pygame.sprite.Sprite):
     def draw(self):
         if self.pos1 != None:
             pygame.draw.line(self.screen, [255,0,0], self.pos0, self.pos1)
+            self.mass = distance(self.pos0, self.pos1) * 10 ** 3
+
+    def normalizeTo(self, length):
+        r = (self.pos1[0] - self.pos0[0], self.pos1[1] - self.pos0[1])
+        r = pygame.math.Vector2(r)
+        r.scale_to_length(length)
+        self.pos1 = (self.pos0[0] + r[0], self.pos0[1] + r[1])
+        self.mass = distance(self.pos0, self.pos1) * 10 ** 3
 
 class Title(pygame.sprite.Sprite):
     def __init__(self, screen, message):
@@ -350,12 +408,17 @@ class Customer(pygame.sprite.Sprite):
         super().__init__()
 
 class Parcel(pygame.sprite.Sprite):
-    def __init__(self, color, pos, key):
+    def __init__(self, color, pos, key, velocity):
         super().__init__()
         self.pos = pos
-        self.velocity = pygame.math.Vector2(0,0)
+        self.velocity = pygame.math.Vector2(velocity)
         self.mass = 10
         self.radius = 10
+        self.key = key
+        if self.key == "health":
+            color = [255, 0, 0]
+        elif self.key == "fuel":
+            color = [255, 127, 0]
         self.image = pygame.Surface([self.radius * 2, self.radius * 2],
                                     pygame.SRCALPHA)
         self.image.fill([255, 255, 255, 0])
@@ -363,22 +426,38 @@ class Parcel(pygame.sprite.Sprite):
                            self.radius)
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
-        self.key = key
         self.trailPoints = None
 
     def move(self, time):
+        if self.key == "health":
+            color = [255, 0, 0]
+        elif self.key == "fuel":
+            color = [255, 127, 0]
+        pygame.draw.circle(self.image, color, (self.radius, self.radius),
+                               self.radius)
         self.pos = tuple((self.pos[i] + self.velocity[i] * time) for i in range(
             len(self.velocity)))
         self.rect.center = self.pos
 
-    def draw(self):
-        pass
+    def update(self):
+        if self.key == "health":
+            color = [255, 0, 0]
+        elif self.key == "fuel":
+            color = [255, 127, 0]
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, color, (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
 
 class Scavenger(pygame.sprite.Sprite):
     def __init__(self, color, pos):
         super().__init__()
+        self.color = color
         self.pos = pos
-        self.velocity = pygame.math.Vector2(0.1,0)
+        self.velocity = pygame.math.Vector2(0.06,0)
         self.mass = 10
         self.radius = 10
         self.image = pygame.Surface([self.radius * 2, self.radius * 2],
@@ -394,5 +473,25 @@ class Scavenger(pygame.sprite.Sprite):
             len(self.velocity)))
         self.rect.center = self.pos
 
-    def draw(self):
-        pass
+    def update(self):
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, self.color, (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = self.pos
+
+class Blot(pygame.sprite.Sprite):
+    def __init__(self, pos):
+        super().__init__()
+        self.density = 7 * 10 ** 3
+        self.radius = 25
+        self.mass = 0
+        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
+                                    pygame.SRCALPHA)
+        self.image.fill([255, 255, 255, 0])
+        pygame.draw.circle(self.image, [255, 0, 0], (self.radius, self.radius),
+                           self.radius)
+        self.rect = self.image.get_rect()
+        self.rect.center = pos

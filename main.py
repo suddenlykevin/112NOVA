@@ -65,6 +65,9 @@ class Mode(object):
         self.clock = clock
         self.width, self.height = screen.get_width(), screen.get_height()
 
+    def paused(self):
+        pass
+
 # Pauses game
 class PauseScreen(Mode):
     def __init__(self, control, screen, clock):
@@ -94,7 +97,40 @@ class PauseScreen(Mode):
     def menu(self):
         self.control.setActiveMode(self.control.splashMode)
 
+    def toggleTrail(self):
+        if self.control.options["trail"] == "ON":
+            self.control.options["trail"] = "OFF"
+        else:
+            if self.control.options["gravity"] == "Field":
+                self.control.options["trail"] = "ON"
+
+    def toggleGravity(self):
+        if self.control.options["gravity"] == "Field":
+            self.control.options["gravity"] = "Nested"
+            self.control.options["trail"] = "OFF"
+        else:
+            self.control.options["gravity"] = "Field"
+
+    def togglePath(self):
+        if self.control.options["path"] == "ColDiff":
+            self.control.options["path"] = "Fast"
+        else:
+            self.control.options["path"] = "ColDiff"
+
     def options(self):
+        toggle1 = Button(self.screen, (self.width * 6 // 10, self.height // 4),
+                        (self.width // 3, self.height // 16),
+                        f"{self.control.options['trail']}", [128] * 3,
+                         self.toggleTrail)
+        toggle2 = Button(self.screen, (self.width * 6 // 10, self.height // 3),
+                        (self.width // 3, self.height // 16),
+                        f"{self.control.options['gravity']}", [128] * 3,
+                        self.toggleGravity)
+        toggle3 = Button(self.screen, (self.width * 6 // 10, self.height * 5
+                        // 12), (self.width // 3, self.height // 16),
+                        f"{self.control.options['path']}", [128] * 3,
+                        self.togglePath)
+        optionButtons = pygame.sprite.Group(toggle1, toggle2, toggle3)
         while self.running:
             self.screen.fill([255, 255, 255])
             for event in pygame.event.get():
@@ -105,6 +141,20 @@ class PauseScreen(Mode):
                     pygame.display.quit()
                     pygame.quit()
                     sys.exit()
+            font = pygame.font.Font('Linebeam.ttf', 20)
+            labels = [font.render('Trails', True, [0] * 3), font.render(
+                    'Gravity Calculation', True, [0] * 3),
+                    font.render('Pathfinding', True, [0] * 3)]
+            for i in range(len(labels)):
+                surface = labels[i].get_rect()
+                surface.topleft = (self.width // 10, self.height * 3 //
+                                   12 + i * self.height // 12)
+                self.screen.blit(labels[i], surface)
+            optionButtons.update()
+            toggle1.updateText(f"{self.control.options['trail']}")
+            toggle2.updateText(f"{self.control.options['gravity']}")
+            toggle3.updateText(f"{self.control.options['path']}")
+            optionButtons.draw(self.screen)
             pygame.display.flip()
 
     def paused(self):
@@ -152,27 +202,28 @@ class PauseScreen(Mode):
 # main gameplay
 class NovaGame(Mode):
     # Initial attributes
-    def __init__(self, control, screen, clock):
+    def __init__(self, control, screen, clock, customMap = (False, None)):
         super().__init__(control, screen, clock)
         self.player = Player(self.screen, (self.width * 7 / 9, self.height * 7 /
                                            9))
         self.enemies = EnemyGroup()
         self.planets = pygame.sprite.Group()
-        self.planetDensity = 10**4 # arbitrary value for now
         self.G = 6.7 * (10**-11)
         self.timer = 100
         self.growRate = 0.2
         self.map = Map(self.screen, 4)
         self.currentPlanet = [None, False]
-        self.wave = WaveGenerator(10,18,1).solve()
+        self.wave = list(reversed(WaveGenerator(10, 15, 1).solve()))
         self.diff = 10
         self.length = 18
         self.maxDiff = 2
         self.waveNum = 1
+        self.custom = customMap
         self.title = Title(self.screen, "Wave 1")
         self.shrinkRate = -0.005
-        self.currentWall = (None, False)
+        self.currentWall = [None, False]
         self.walls = pygame.sprite.Group()
+        self.repair = False
 
     # updates global physics acting on each planet -- maybe create vector field?
     def updatePhysics(self):
@@ -270,7 +321,7 @@ class NovaGame(Mode):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.control.setActiveMode(self.control.pauseMode)
-                if event.key == pygame.K_1:
+                elif event.key == pygame.K_1:
                     self.enemies.add(Enemy(self.screen, (45, 45)))
                 elif event.key == pygame.K_2:
                     self.enemies.add(EmptyEnemy(self.screen, (45, 45)))
@@ -280,6 +331,18 @@ class NovaGame(Mode):
                     self.enemies.add(SpeedyEnemy(self.screen, (45, 45)))
                 elif event.key == pygame.K_5:
                     self.enemies.add(DestructiveEnemy(self.screen, (45, 45)))
+                elif event.key == pygame.K_r:
+                    if self.repair and self.player.repairFuel > 0:
+                        self.player.repairFuel -= 1
+                        self.control.miniGameMode = MiniGame(self.control,
+                                                             self.screen,
+                                                     self.clock, self.player)
+                        if random.choice([True, False]):
+                            self.player.pos = (random.uniform(0, self.width -
+                                                              self.player.radius), 0)
+                        else:
+                            self.player.pos = (0, random.uniform(0, self.height - self.player.radius))
+                        self.control.setActiveMode(self.control.miniGameMode)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if pygame.mouse.get_pressed()[0]:
                     if (not self.isInPlanet(pygame.mouse.get_pos()) and not
@@ -289,7 +352,8 @@ class NovaGame(Mode):
                         self.planets.add(self.currentPlanet[0])
                 elif pygame.mouse.get_pressed()[2]:
                     if (not self.isInPlanet(pygame.mouse.get_pos()) and not
-                            self.isInPath(pygame.mouse.get_pos())):
+                            self.isInPath(pygame.mouse.get_pos()) and
+                            self.player.fuel > 10 ** 3):
                         self.currentWall = [Wall(self.screen,
                                                    pygame.mouse.get_pos(),
                                                    None), True]
@@ -298,10 +362,20 @@ class NovaGame(Mode):
                 if self.currentPlanet[1]:
                     self.currentPlanet[1] = False
                     self.currentPlanet[0].mass = (2 * math.pi * 
-                    (self.currentPlanet[0].radius**2) * self.planetDensity)
+                    (self.currentPlanet[0].radius**2) * self.currentPlanet[
+                                                      0].density)
                 elif self.currentWall[1]:
                     self.currentWall[1] = False
                     self.currentWall[0].pos1 = pygame.mouse.get_pos()
+                    self.currentWall[0].mass = distance(
+                        self.currentWall[0].pos0,
+                        self.currentWall[0].pos1) * 10 ** 3
+                    if self.player.fuel >= self.currentWall[0].mass:
+                        self.player.fuel -= self.currentWall[0].mass
+                    else:
+                        self.currentWall[0].normalizeTo(self.player.fuel / (10
+                                                                            ** 3))
+                        self.player.fuel -= self.currentWall[0].mass
             elif event.type == pygame.QUIT:
                 pygame.display.quit()
                 pygame.quit()
@@ -322,9 +396,6 @@ class NovaGame(Mode):
                 path.pos[1] < pos[1] < path.pos[1] + path.size):
                 return True
         return False
-
-    def paused(self):
-        pass
 
     def checkCollisions(self):
         hit_list = []
@@ -375,19 +446,32 @@ class NovaGame(Mode):
             self.currentPlanet[0].pos[1] - self.currentPlanet[0].radius < 0 or
             self.currentPlanet[0].pos[1] + self.currentPlanet[0].radius > self.height):
             collide = True
+        for planet in self.planets:
+            if planet != self.currentPlanet[0] and pygame.sprite.collide_circle(
+                planet, self.currentPlanet[0]):
+                collide = True
         if (self.player.fuel > self.growRate and not collide and
-                self.currentPlanet[0].radius < self.width//6):
+                self.currentPlanet[0].radius < self.width//5):
             self.currentPlanet[0].update(self.growRate * self.clock.get_time())
-            self.player.fuel -= self.growRate * self.planetDensity / 2
+            self.player.fuel -= self.growRate * self.currentPlanet[0].density* 2 / 3
         else:
             self.currentPlanet[1] = False
 
     def newMap(self):
-        self.planets.empty()
-        self.map = Map(self.screen, 4)
+        if self.custom[0]:
+            self.map = self.custom[1]
+        else:
+            self.planets.empty()
+            self.walls.empty()
+            intricacy = 4
+            if self.diff > 3:
+                intricacy = 3
+            elif self.diff > 6:
+                intricacy = 2
+            self.map = Map(self.screen, intricacy)
 
     def updateWave(self):
-        if len(self.wave) > 0:
+        if len(self.wave) > self.wave.count(0):
             if self.wave[-1] == 1:
                 self.enemies.add(Enemy(self.screen, (45, 45)))
             elif self.wave[-1] == 2:
@@ -410,8 +494,8 @@ class NovaGame(Mode):
                 lenDiff = 0
             self.diff += diffDiff
             self.length += lenDiff
-            self.wave = WaveGenerator(self.diff, self.length,
-                                      self.maxDiff).solve()
+            self.wave = list(reversed(WaveGenerator(self.diff, self.length,
+                                      self.maxDiff).solve()))
             self.newMap()
             self.waveNum += 1
             if self.waveNum > 3:
@@ -436,14 +520,32 @@ class NovaGame(Mode):
             self.planets.draw(self.screen)
             self.enemies.draw(self.screen)
             if self.currentWall[1]:
-                self.currentWall[0].pos1 = pygame.mouse.get_pos()
+                if self.isInPath(pygame.mouse.get_pos()):
+                    self.currentWall[1] = False
+                    self.currentWall[0].pos1 = pygame.mouse.get_pos()
+                    self.currentWall[0].mass = distance(
+                        self.currentWall[0].pos0,
+                        self.currentWall[0].pos1) * 10 ** 3
+                    if self.player.fuel >= self.currentWall[0].mass:
+                        self.player.fuel -= self.currentWall[0].mass
+                    else:
+                        self.currentWall[0].normalizeTo(self.player.fuel / (10
+                                                        ** 3))
+                        self.player.fuel -= self.currentWall[0].mass
+                else:
+                    self.currentWall[0].pos1 = pygame.mouse.get_pos()
             for wall in self.walls:
                 wall.draw()
             timer = timerFont.render(f'{len(self.wave) - self.wave.count(0)}',
                                      True, [255] * 3)
             timerSurface = timer.get_rect()
             timerSurface.center = ((self.width//2, self.height*1//20))
-            if pygame.time.get_ticks() % 750 == 0:
+            if not self.custom[0] and self.player.fuel <= (10 ** 6) / 4 or \
+                self.player.health <= 2:
+                self.repair = True
+            else:
+                self.repair = False
+            if pygame.time.get_ticks() % 1000 == 0:
                 self.updateWave()
             if self.title != None:
                 self.screen.blit(self.title.image, self.title.rect)
@@ -466,7 +568,7 @@ class EndScreen(Mode):
                         [self.width // 5, self.height - self.height // 5],
                         50, "Play Again", [255, 0, 0], self.game),
             RoundButton(screen, [self.width - self.width // 5, self.height -
-                                 self.height // 5], 50, "Exit", [255, 0, 0],
+                                 self.height // 5], 50, "Menu", [255, 0, 0],
                         self.quit)
         )
 
@@ -478,9 +580,7 @@ class EndScreen(Mode):
                 sys.exit()
 
     def quit(self):
-        pygame.display.quit()
-        pygame.quit()
-        sys.exit()
+        self.control.setActiveMode(self.control.splashMode)
 
     def game(self):
         self.control.gameMode = NovaGame(self.control, self.screen, self.clock)
@@ -522,20 +622,28 @@ class EndScreen(Mode):
             self.screen.blit(subTitle, subSurface)
             pygame.display.flip()
 
-class SandBox(Mode):
-    def __init__(self, control, screen, clock):
-        super().__init__(control, screen, clock)
-
 # Title/splashscreen
 class TitleScreen(Mode):
     def __init__(self, control, screen, clock):
         super().__init__(control, screen, clock)
         self.buttons = pygame.sprite.Group(
-        RoundButton(screen, [self.width//5, self.height - self.height//5],
-                    50, "Play", [255, 0, 0], self.game),
-        RoundButton(screen, [self.width - self.width // 5, self.height -
-                    self.height // 5], 50, "Exit", [255, 0, 0], self.quit)
-        )
+            Button(self.screen,
+                   [self.width // 3, self.height + 10 - self.height * 4 //
+                    20], [self.width // 3, self.height // 20], "Pathfinding "
+                                                               "Demo",
+                   [128, 128, 128], self.pathfinder),
+            Button(self.screen,
+                   [self.width // 3, self.height - self.height * 5 //
+                    20], [self.width // 3, self.height // 20], "Level Editor",
+                   [128, 128, 128], self.sandbox),
+            RoundButton(self.screen,
+                        [self.width // 5, self.height - self.height // 5],
+                        50, "Play", [255, 0, 0], self.game),
+            RoundButton(self.screen, [self.width - self.width // 5,
+                                      self.height -
+                                      self.height // 5], 50, "Exit",
+                        [255, 0, 0],
+                        self.quit))
 
     def checkEvents(self):
         for event in pygame.event.get():
@@ -549,18 +657,37 @@ class TitleScreen(Mode):
         pygame.quit()
         sys.exit()
 
+    def sandbox(self):
+        self.control.sandBoxMode = SandBox(self.control, self.screen,
+                                           self.clock)
+        self.control.setActiveMode(self.control.sandBoxMode)
+
+    def pathfinder(self):
+        self.control.pathMode = PathMode(self.control, self.screen, self.clock)
+        self.control.setActiveMode(self.control.pathMode)
+
     def game(self):
         self.control.gameMode = NovaGame(self.control, self.screen, self.clock)
         self.control.setActiveMode(self.control.gameMode)
 
     def paused(self):
         self.buttons = pygame.sprite.Group(
+            Button(self.screen,
+                   [self.width // 3, self.height + 10 - self.height * 4 //
+                    20], [self.width // 3, self.height // 20],
+                   "Pathfinding Demo",
+                   [128, 128, 128], self.pathfinder),
+            Button(self.screen,
+                   [self.width // 3, self.height - self.height * 5 //
+                    20], [self.width // 3, self.height // 20], "Level Editor",
+                   [128, 128, 128], self.sandbox),
             RoundButton(self.screen,
                         [self.width // 5, self.height - self.height // 5],
                         50, "Play", [255, 0, 0], self.game),
             RoundButton(self.screen, [self.width - self.width // 5,
                                       self.height -
-                                 self.height // 5], 50, "Exit", [255, 0, 0],
+                                      self.height // 5], 50, "Exit",
+                        [255, 0, 0],
                         self.quit))
 
     def play(self):
@@ -589,10 +716,12 @@ class ModeController(object):
         self.screen = pygame.display.set_mode((width, height))
         self.options = {"gravity": "Field", "path": "ColDiff", "trail": "ON"}
         pygame.display.set_caption('NOVA')
+        self.miniGameMode = None
+        self.sandBoxMode = SandBox(self, self.screen, self.clock)
+        self.pathMode = PathMode(self, self.screen, self.clock)
+        self.pauseMode = PauseScreen(self, self.screen, self.clock)
         self.splashMode = TitleScreen(self, self.screen, self.clock)
         self.gameMode = NovaGame(self, self.screen, self.clock)
-        self.miniGameMode = MiniGame(self, self.screen, self.clock)
-        self.pauseMode = PauseScreen(self, self.screen, self.clock)
         self.endMode = EndScreen(self, self.screen, self.clock)
         self.activeMode = None
         self.lastActive = None

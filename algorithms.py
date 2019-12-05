@@ -56,6 +56,8 @@ class MapGenerator(object):
         return MapState(newCoords)
 
     def stateSatisfiesConstraints(self, state):
+        if len(state.coords) < 2:
+            return True
         lastPos = state.coords[-2]
         currentPos = state.coords[-1]
         if not (0 <= currentPos[0] < self.rows and 0 <= currentPos[1] <
@@ -161,7 +163,7 @@ class WaveGenerator(object):
 
 #################################################
 #
-# A* Pathfinding
+# A* Pathfinding to be implemented
 #
 ################################################
 
@@ -219,10 +221,12 @@ class DiffusionState(object):
 # Class used to store and generate Collaborative Diffusion map given
 # obstacles and antiobjects (goals)
 class ColDiffMap(object):
-    def __init__(self, screen, map, antiobjects):
+    def __init__(self, screen, map, antiobjects, tracks, fast = True):
         self.width, self.height = screen.get_width(), screen.get_height()
+        self.tracks = tracks
         self.map = map
         self.antiobjects = antiobjects
+        self.fast = fast
 
     # converts view coordinates to model coordinates
     def viewToModel(self, tuple):
@@ -289,14 +293,25 @@ class ColDiffMap(object):
 
     # checks if map is filled with values
     def isFilled(self, map):
-        for row in map:
-            if row.count(0) > 1:
-                return False
-        return True
+        if self.fast:
+            for track in self.tracks:
+                pos = self.viewToModel(track.pos)
+                if map[pos[1]][pos[0]] == 0:
+                    return False
+            return True
+        else:
+            for row in map:
+                if row.count(0) > 1:
+                    return False
+            return True
 
     # recursively diffuses antiobjects until map is filled
     def diffuse(self, state):
-        if self.isFilled(state.map):
+        if ((self.isFilled(state.map) and (not self.fast or state.iter > len(
+                state.map)/3)) or
+                (state.iter > len(state.map) * 2)):
+            return state
+        elif state.iter > 75:
             return state
         else:
             newMap = copy.deepcopy(state.map)
