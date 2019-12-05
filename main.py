@@ -6,6 +6,13 @@
 #
 # Asset Sources:
 # Font : https://www.dafont.com/linear-beam.font
+# Starman: http://joyreactor.cc/post/3862683
+# Path: https://opengameart.org/content/16px-rounded-path-arrows
+# Orb: https://opengameart.org/content/rotating-orbs
+# Smoke: https://stock.adobe.com/images/pixel-art-explosion-game-icons-set-comic-boom-flame-effects-for-emotion/300428826
+# Splash: https://66.media.tumblr.com/32fde74f7cde48f9235406b3ab634034/tumblr_p1uq4gd6Vn1u2j2n2o1_500.png
+# Misc Sprites: https://stock.adobe.com/images/retro-space-arcade-game-invaders-spaceship-pixel-invader-monster-and-retro-video-games-pixel-art-isolated-objects-illustration-set/240215977
+# Sonic: http://d-boome0811fmp.blogspot.com/2011/02/sonic-pixel.html
 #
 #################################################
 
@@ -211,7 +218,10 @@ class NovaGame(Mode):
         self.G = 6.7 * (10**-11)
         self.timer = 100
         self.growRate = 0.2
-        self.map = Map(self.screen, 4)
+        if not customMap[0]:
+            self.map = Map(self.screen, 4)
+        else:
+            self.map = customMap[1]
         self.currentPlanet = [None, False]
         self.wave = list(reversed(WaveGenerator(10, 15, 1).solve()))
         self.diff = 10
@@ -331,6 +341,8 @@ class NovaGame(Mode):
                     self.enemies.add(SpeedyEnemy(self.screen, (45, 45)))
                 elif event.key == pygame.K_5:
                     self.enemies.add(DestructiveEnemy(self.screen, (45, 45)))
+                elif event.key == pygame.K_RIGHT:
+                    self.wave = []
                 elif event.key == pygame.K_r:
                     if self.repair and self.player.repairFuel > 0:
                         self.player.repairFuel -= 1
@@ -453,7 +465,8 @@ class NovaGame(Mode):
         if (self.player.fuel > self.growRate and not collide and
                 self.currentPlanet[0].radius < self.width//5):
             self.currentPlanet[0].update(self.growRate * self.clock.get_time())
-            self.player.fuel -= self.growRate * self.currentPlanet[0].density* 2 / 3
+            self.player.fuel -= self.growRate * self.currentPlanet[0].density\
+                                / 2
         else:
             self.currentPlanet[1] = False
 
@@ -492,18 +505,20 @@ class NovaGame(Mode):
             elif self.waveNum > 9 and self.diff < (self.length - 1) * 5:
                 diffDiff = 1
                 lenDiff = 0
+            if self.waveNum <= 3:
+                self.maxDiff = 2
+            elif self.waveNum <= 5:
+                self.maxDiff = 3
+            elif self.waveNum <= 7:
+                self.maxDiff = 4
+            else:
+                self.maxDiff = 5
             self.diff += diffDiff
             self.length += lenDiff
             self.wave = list(reversed(WaveGenerator(self.diff, self.length,
                                       self.maxDiff).solve()))
             self.newMap()
             self.waveNum += 1
-            if self.waveNum > 3:
-                self.maxDiff = 3
-            elif self.waveNum > 5:
-                self.maxDiff = 4
-            elif self.waveNum > 7:
-                self.maxDiff = 5
             self.title = Title(self.screen, f"Wave {self.waveNum}")
 
     def play(self):
@@ -540,8 +555,8 @@ class NovaGame(Mode):
                                      True, [255] * 3)
             timerSurface = timer.get_rect()
             timerSurface.center = ((self.width//2, self.height*1//20))
-            if not self.custom[0] and self.player.fuel <= (10 ** 6) / 4 or \
-                self.player.health <= 2:
+            if not self.custom[0] and self.player.fuel <= (10 ** 6) / 3 or \
+                self.player.health <= 5:
                 self.repair = True
             else:
                 self.repair = False
@@ -626,6 +641,13 @@ class EndScreen(Mode):
 class TitleScreen(Mode):
     def __init__(self, control, screen, clock):
         super().__init__(control, screen, clock)
+        self.background = pygame.image.load('Assets/background.png')
+        self.background = pygame.transform.scale(self.background,
+                                                 (self.width, self.height))
+        self.bgRect = self.background.get_rect()
+        self.bgRect.topleft = (0, 0)
+        self.player = Player(self.screen, (self.width//2 - self.width//16,
+                                           self.height * 3 // 10))
         self.buttons = pygame.sprite.Group(
             Button(self.screen,
                    [self.width // 3, self.height + 10 - self.height * 4 //
@@ -695,8 +717,11 @@ class TitleScreen(Mode):
         littleFont = pygame.font.Font('Linebeam.ttf', 18)
         while self.running:
             self.checkEvents()
-            self.screen.fill([255,255,255])
-            titleText = titleFont.render('NOVA', True, [(pygame.time.get_ticks()//25) % 255] * 3)
+            self.screen.blit(self.background, self.bgRect)
+            titleText = titleFont.render('DON\'T TOUCH STARMAN', True,
+                                         [(pygame.time.get_ticks(
+
+            )//25) % 255] * 3)
             subTitle = littleFont.render('''PRESS AND HOLD TO ACTIVATE BUTTONS''', True, [(pygame.time.get_ticks()//25) % 255] * 3)
             textSurface = titleText.get_rect()
             subSurface = subTitle.get_rect()
@@ -704,6 +729,7 @@ class TitleScreen(Mode):
             textSurface.center = ((self.width//2, self.height//2))
             self.screen.blit(titleText, textSurface)
             self.screen.blit(subTitle, subSurface)
+            self.player.draw()
             self.buttons.update()
             self.buttons.draw(self.screen)
             self.clock.tick()
@@ -715,7 +741,7 @@ class ModeController(object):
         self.width, self.height = width, height
         self.screen = pygame.display.set_mode((width, height))
         self.options = {"gravity": "Field", "path": "ColDiff", "trail": "ON"}
-        pygame.display.set_caption('NOVA')
+        pygame.display.set_caption('DON\'T TOUCH STARMAN')
         self.miniGameMode = None
         self.sandBoxMode = SandBox(self, self.screen, self.clock)
         self.pathMode = PathMode(self, self.screen, self.clock)

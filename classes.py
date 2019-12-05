@@ -27,14 +27,11 @@ class Player(pygame.sprite.Sprite):
         self.reserveFuel = (10 ** 6)
         self.repairFuel = 3
         self.health = 8
-        self.image = pygame.Surface([self.screen.get_width()/8] * 2,
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        self.radius = self.screen.get_width()/16
-        pygame.draw.circle(self.image, [0, 0, 255],
-                           (self.screen.get_width()/16,
-                            self.screen.get_width()/16),
-                           self.screen.get_width()/16)
+        self.spriteList = self.retrieveSprites()
+        self.spriteFrames = [0, 0]
+        self.radius = self.screen.get_width()//16
+        self.image = self.spriteList[0]
+        self.image = pygame.transform.scale(self.image, (self.radius * 2,) * 2)
         self.rect = self.image.get_rect()
         self.rect.topleft = self.pos
 
@@ -66,17 +63,24 @@ class Player(pygame.sprite.Sprite):
             self.screen.blit(rPrompt, rect)
 
     def draw(self):
-        self.image = pygame.Surface([self.screen.get_width() / 8] * 2,
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        self.radius = self.screen.get_width() / 16
-        pygame.draw.circle(self.image, [0, 0, 255],
-                           (self.screen.get_width() / 16,
-                            self.screen.get_width() / 16),
-                           self.screen.get_width() / 16)
+        self.spriteFrames[1] += 1
+        if self.spriteFrames[1] >= 1000:
+            self.spriteFrames[1] = 0
+            self.spriteFrames[0] = (self.spriteFrames[0] + 1) % 4
+            self.image = self.spriteList[self.spriteFrames[0]]
+        self.radius = self.screen.get_width() // 16
+        self.image = pygame.transform.scale(self.image, (self.radius * 2,) * 2)
         self.rect = self.image.get_rect()
         self.rect.topleft = self.pos
         self.screen.blit(self.image,self.rect)
+
+    def retrieveSprites(self):
+        spriteLoc = ["Assets/player1.png", "Assets/player2.png",
+                   "Assets/player3.png", "Assets/player4.png"]
+        sprites = []
+        for path in spriteLoc:
+            sprites.append(pygame.image.load(path).convert_alpha())
+        return sprites
 
 class Planet(pygame.sprite.Sprite):
     def __init__(self, screen, pos):
@@ -117,11 +121,8 @@ class Enemy(pygame.sprite.Sprite):
         self.damage = 1
         self.gravityMult = 1
         self.gravityAcc = pygame.math.Vector2(0,0)
-        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        pygame.draw.circle(self.image, [128] * 3, (self.radius, self.radius),
-                           self.radius)
+        self.image = pygame.image.load('Assets/normal.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
         self.resist = False
@@ -134,7 +135,14 @@ class Enemy(pygame.sprite.Sprite):
         self.velocity = self.pathVelocity * mult + self.gravityAcc * self.gravityMult
         self.pos = tuple((self.pos[i] + self.velocity[i] * time) for i in range(
             len(self.velocity)))
+        self.updateSprite()
         self.rect.center = self.pos
+
+    def updateSprite(self):
+        self.image = pygame.image.load('Assets/normal.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
+        self.image = pygame.transform.rotate(self.image,
+                                             -self.velocity.as_polar()[1])
 
     def gravitate(self, vector, resist):
         # If gravity = 0, gravity acceleration = 0
@@ -154,10 +162,18 @@ class PathPiece(pygame.sprite.Sprite):
     directions = [[1,0], [0,1], [-1,0], [0,-1]]
     def __init__(self, pos, size, orientation, corner):
         super().__init__()
+        self.orientation = orientation
         self.corner = corner
         self.size = size
-        self.image = pygame.Surface([size] * 2)
-        self.image.fill([32,32,64])
+        self.sprites = ['Assets/horizontal.png', 'Assets/vertical.png']
+        self.corners = ['Assets/corner1.png', 'Assets/corner2.png',
+                        'Assets/corner3.png', 'Assets/corner4.png']
+        if corner[0]:
+            self.image = pygame.image.load(self.corners[corner[1]]).convert_alpha()
+        else:
+            self.image = pygame.image.load(self.sprites[
+                                           orientation % 2]).convert_alpha()
+        self.image = pygame.transform.scale(self.image, (size, size))
         self.pos = pos
         self.rect = self.image.get_rect()
         self.rect.topleft = self.pos
@@ -186,12 +202,20 @@ class Map(pygame.sprite.Group):
                     orientation = 1
                 else:
                     orientation = 3
-            corner = False
+            corner = (False, None)
             if i > 0:
-                if (self.coords[i][0] != self.coords[i-1][0] and
-                        orientation in (1,3)) or (self.coords[i][1] !=
-                        self.coords[i-1][1] and orientation in (0,2)):
-                    corner = True
+                if (spriteList[-1].orientation == 0 and orientation == 1 or
+                    spriteList[-1].orientation == 3 and orientation == 2):
+                    corner = (True, 2)
+                elif (spriteList[-1].orientation == 2 and orientation == 1 or
+                      spriteList[-1].orientation == 3 and orientation == 0):
+                    corner = (True, 3)
+                elif (spriteList[-1].orientation == 0 and orientation == 3 or
+                      spriteList[-1].orientation == 1 and orientation == 2):
+                    corner = (True, 1)
+                elif (spriteList[-1].orientation == 2 and orientation == 3 or
+                      spriteList[-1].orientation == 1 and orientation == 0):
+                    corner = (True, 0)
             transCoord = [elem * self.tileSize for elem in self.coords[i]]
             spriteList.append(PathPiece(transCoord, self.tileSize, orientation,
                                      corner))
@@ -202,50 +226,62 @@ class DestructiveEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
         self.mass = 0
-        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        pygame.draw.circle(self.image, [255, 0, 0], (self.radius, self.radius),
-                           self.radius)
+        self.image = pygame.image.load('Assets/bomb.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
+
+    def updateSprite(self):
+        self.image = pygame.image.load('Assets/bomb.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
+        self.image = pygame.transform.rotate(self.image,
+                                             -self.velocity.as_polar()[1])
 
 class EmptyEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
         self.mass = 0
         self.radius = 10
-        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        pygame.draw.circle(self.image, [0, 0, 255], (self.radius, self.radius),
-                           self.radius, width = 2)
+        self.image = pygame.image.load('Assets/bubble.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
+
+    def updateSprite(self):
+        self.image = pygame.image.load('Assets/bubble.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
+        self.image = pygame.transform.rotate(self.image,
+                                             -self.velocity.as_polar()[1])
 
 class ResistiveEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
-        self.gravityMult = 0.7
-        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        pygame.draw.circle(self.image, [64, 64, 64], (self.radius, self.radius),
-                           self.radius)
+        self.gravityMult = 0.6
+        self.image = pygame.image.load('Assets/heavy.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
+
+    def updateSprite(self):
+        self.image = pygame.image.load('Assets/heavy.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
+        self.image = pygame.transform.rotate(self.image,
+                                             -self.velocity.as_polar()[1])
 
 class SpeedyEnemy(Enemy):
     def __init__(self, screen, pos):
         super().__init__(screen, pos)
         self.pathSpeed = random.uniform(0.125, 0.2)
-        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        pygame.draw.circle(self.image, [0, 0, 255], (self.radius, self.radius),
-                           self.radius)
+        self.image = pygame.image.load('Assets/sonic.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
+
+    def updateSprite(self):
+        self.image = pygame.image.load('Assets/sonic.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
+        self.image = pygame.transform.rotate(self.image,
+                                             -self.velocity.as_polar()[1])
 
 def wallBetweenPos(pos0, pos1, wall):
     if wall.pos1 == None:
@@ -416,34 +452,33 @@ class Parcel(pygame.sprite.Sprite):
         self.radius = 10
         self.key = key
         if self.key == "health":
-            color = [255, 0, 0]
+            self.image = pygame.image.load('Assets/health.png')
+            self.image = pygame.transform.scale(self.image, (20, 20))
         elif self.key == "fuel":
-            color = [255, 127, 0]
-        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        pygame.draw.circle(self.image, color, (self.radius, self.radius),
-                           self.radius)
+            self.image = pygame.image.load('Assets/fuel.png')
+            self.image = pygame.transform.scale(self.image, (20, 20))
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
         self.trailPoints = None
 
     def move(self, time):
         if self.key == "health":
-            color = [255, 0, 0]
+            self.image = pygame.image.load('Assets/health.png')
+            self.image = pygame.transform.scale(self.image, (20, 20))
         elif self.key == "fuel":
-            color = [255, 127, 0]
-        pygame.draw.circle(self.image, color, (self.radius, self.radius),
-                               self.radius)
+            self.image = pygame.image.load('Assets/fuel.png')
+            self.image = pygame.transform.scale(self.image, (20, 20))
         self.pos = tuple((self.pos[i] + self.velocity[i] * time) for i in range(
             len(self.velocity)))
         self.rect.center = self.pos
 
     def update(self):
         if self.key == "health":
-            color = [255, 0, 0]
+            self.image = pygame.image.load('Assets/health.png')
+            self.image = pygame.transform.scale(self.image, (20, 20))
         elif self.key == "fuel":
-            color = [255, 127, 0]
+            self.image = pygame.image.load('Assets/fuel.png')
+            self.image = pygame.transform.scale(self.image, (20, 20))
         self.image = pygame.Surface([self.radius * 2, self.radius * 2],
                                     pygame.SRCALPHA)
         self.image.fill([255, 255, 255, 0])
@@ -460,25 +495,25 @@ class Scavenger(pygame.sprite.Sprite):
         self.velocity = pygame.math.Vector2(0.06,0)
         self.mass = 10
         self.radius = 10
-        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        pygame.draw.circle(self.image, color, (self.radius, self.radius),
-                           self.radius)
+        self.image = pygame.image.load('Assets/scavenger.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
 
     def move(self, time):
+        self.image = pygame.image.load('Assets/scavenger.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
+        self.image = pygame.transform.rotate(self.image,
+                                             -self.velocity.as_polar()[1])
         self.pos = tuple((self.pos[i] + self.velocity[i] * time) for i in range(
             len(self.velocity)))
         self.rect.center = self.pos
 
     def update(self):
-        self.image = pygame.Surface([self.radius * 2, self.radius * 2],
-                                    pygame.SRCALPHA)
-        self.image.fill([255, 255, 255, 0])
-        pygame.draw.circle(self.image, self.color, (self.radius, self.radius),
-                           self.radius)
+        self.image = pygame.image.load('Assets/scavenger.png')
+        self.image = pygame.transform.scale(self.image, (20, 20))
+        self.image = pygame.transform.rotate(self.image,
+                                             -self.velocity.as_polar()[1])
         self.rect = self.image.get_rect()
         self.rect.center = self.pos
 

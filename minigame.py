@@ -59,13 +59,15 @@ class MiniGame(Mode):
             if self.control.options["path"] == "Fast":
                 potential = ColDiffMap(self.screen, self.map,
                                        [Parcel([0] * 3, (self.width/2,
-                                                         self.height/2), 0,
+                                                         self.height/2),
+                                               "health",
                                                (0,0))],
                                        self.enemies).solve()
             else:
                 potential = ColDiffMap(self.screen, self.map,
                                        [Parcel([0] * 3, (self.width/2,
-                                                         self.height/2), 0,
+                                                         self.height/2),
+                                               "health",
                                                (0,0))],
                                        self.enemies,
                                        False).solve()
@@ -639,7 +641,6 @@ class PathMode(Mode):
             self.checkEvents()
             self.checkCollisions()
             if self.dragging[0]:
-                print("WOAH", self.dragging[1].pos)
                 self.dragging[1].pos = pygame.mouse.get_pos()
                 self.dragging[1].update()
             self.blots.draw(self.screen)
